@@ -37,7 +37,6 @@ web:
 
   interface-url: "http://localhost:3000"
 
-# Private messaging settings
 private-messages:
   # Enable private messaging feature
   enable: true
@@ -47,3 +46,29 @@ private-messages:
   format: "&7[&dPM&7] &e{sender} &7→ &e{receiver}&7: &f{message}"
   # Console logging format for private messages
   console-format: "[PM] {sender} -> {receiver}: {message}"
+
+friends:
+  # Enable friend system
+  enable: true
+  # Maximum number of friends per player
+  max-friends: 50
+  # Friend request expiration time (in hours)
+  request-expiration: 24
+  # Show online status to friends
+  show-online-status: true
+  # Notify when friends join/leave
+  join-leave-notifications: true
+
+chat-groups:
+  # Enable chat groups feature
+  enable: true
+  # Maximum number of groups a player can be in
+  max-groups-per-player: 10
+  # Maximum members per group
+  max-members-per-group: 25
+  # Allow players to opt out of all group invitations
+  allow-opt-out: true
+  # Group chat format
+  format: "&7[&aGroup: &b{group}&7] &f{player}&7: &f{message}"
+  # Auto-delete inactive groups (days)
+  auto-delete-inactive: 30
