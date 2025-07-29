@@ -35,6 +35,8 @@ web:
   # Default web access (users can change this with /minechat setpassword)
   default-password-enabled: false
 
+  interface-url: "http://localhost:3000"
+
 # Private messaging settings
 private-messages:
   # Enable private messaging feature
