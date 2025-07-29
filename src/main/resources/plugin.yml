@@ -1,0 +1,4 @@
+name: minechat
+version: '1.0-SNAPSHOT'
+main: me.harshit.minechat.Minechat
+api-version: '1.21'

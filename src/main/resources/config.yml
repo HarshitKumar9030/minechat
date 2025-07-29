@@ -1,0 +1,32 @@
+mongodb:
+  # change tpo your own connection string
+  connection-string: "mongodb://localhost:27017"
+  # add a database name
+  database-name: "minechat"
+  # Collection name for chat messages
+  collection-name: "chat_messages"
+
+chat:
+  # Enable/disable chat logging to database
+  enable-logging: true
+  # Chat format (use {player} for player name, {message} for message)
+  format: "&7[&bChat&7] &f{player}&7: &f{message}"
+  # Maximum message length
+  max-message-length: 256
+  # Enable chat filtering (basic profanity filter)
+  enable-filter: true
+  # Words to filter (will be replaced with ***
+  # Todo: add more words to this list
+  filtered-words:
+    - "cunt"
+    - "fuck"
+    - "bitch"
+    - "nigga"
+
+web:
+  # Enable web API endpoints
+  enable-api: true
+  # Port for web interface (you'll use this later)
+  port: 8080
+  # Enable CORS for web requests
+  enable-cors: true
