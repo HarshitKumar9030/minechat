@@ -84,13 +84,45 @@ public class FriendCommandHandler implements CommandExecutor, TabCompleter {
 
 
     private void showFriendHelp(Player player) {
-        player.sendMessage(Component.text("=== Friend System Commands ===").color(NamedTextColor.AQUA));
-        player.sendMessage(Component.text("/friend add <player> - Send a friend request").color(NamedTextColor.GREEN));
-        player.sendMessage(Component.text("/friend accept <player> - Accept a friend request").color(NamedTextColor.GREEN));
-        player.sendMessage(Component.text("/friend deny <player> - Deny a friend request").color(NamedTextColor.GREEN));
-        player.sendMessage(Component.text("/friend remove <player> - Remove a friend").color(NamedTextColor.GREEN));
-        player.sendMessage(Component.text("/friend list - View your friend list").color(NamedTextColor.GREEN));
-        player.sendMessage(Component.text("/friend requests - View pending friend requests").color(NamedTextColor.GREEN));
+        // Show comprehensive friend help with better formatting
+        player.sendMessage(Component.text(""));
+        player.sendMessage(Component.text("════════════════════════════════════════").color(NamedTextColor.GOLD));
+        player.sendMessage(Component.text("               Friend System               ").color(NamedTextColor.GOLD).bold());
+        player.sendMessage(Component.text("════════════════════════════════════════").color(NamedTextColor.GOLD));
+        player.sendMessage(Component.text(""));
+
+        player.sendMessage(Component.text("👥 Friend Management:").color(NamedTextColor.YELLOW).bold());
+        player.sendMessage(Component.text("  • /friend add <player>").color(NamedTextColor.GREEN));
+        player.sendMessage(Component.text("    Send a friend request to a player").color(NamedTextColor.GRAY));
+        player.sendMessage(Component.text(""));
+
+        player.sendMessage(Component.text("  • /friend accept <player>").color(NamedTextColor.GREEN));
+        player.sendMessage(Component.text("    Accept a friend request").color(NamedTextColor.GRAY));
+        player.sendMessage(Component.text(""));
+
+        player.sendMessage(Component.text("  • /friend deny <player>").color(NamedTextColor.GREEN));
+        player.sendMessage(Component.text("    Deny a friend request").color(NamedTextColor.GRAY));
+        player.sendMessage(Component.text(""));
+
+        player.sendMessage(Component.text("  • /friend remove <player>").color(NamedTextColor.GREEN));
+        player.sendMessage(Component.text("    Remove a friend from your list").color(NamedTextColor.GRAY));
+        player.sendMessage(Component.text(""));
+
+        player.sendMessage(Component.text("📋 Information Commands:").color(NamedTextColor.BLUE).bold());
+        player.sendMessage(Component.text("  • /friend list").color(NamedTextColor.GREEN));
+        player.sendMessage(Component.text("    View your current friends list").color(NamedTextColor.GRAY));
+        player.sendMessage(Component.text(""));
+
+        player.sendMessage(Component.text("  • /friend requests").color(NamedTextColor.GREEN));
+        player.sendMessage(Component.text("    View pending friend requests").color(NamedTextColor.GRAY));
+        player.sendMessage(Component.text(""));
+
+        // Footer
+        player.sendMessage(Component.text("════════════════════════════════════════").color(NamedTextColor.GOLD));
+        player.sendMessage(Component.text("💡 Tip: Click [Accept] or [Deny] buttons in requests").color(NamedTextColor.AQUA));
+        player.sendMessage(Component.text("🎯 Aliases: /friends, /f").color(NamedTextColor.AQUA));
+        player.sendMessage(Component.text("════════════════════════════════════════").color(NamedTextColor.GOLD));
+        player.sendMessage(Component.text(""));
     }
 
 
