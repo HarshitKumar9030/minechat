@@ -30,3 +30,18 @@ web:
   port: 8080
   # Enable CORS for web requests
   enable-cors: true
+  # Require password authentication for web access
+  require-authentication: true
+  # Default web access (users can change this with /minechat setpassword)
+  default-password-enabled: false
+
+# Private messaging settings
+private-messages:
+  # Enable private messaging feature
+  enable: true
+  # Command aliases for private messaging
+  aliases: ["msg", "pm", "tell", "whisper"]
+  # Format for private messages
+  format: "&7[&dPM&7] &e{sender} &7→ &e{receiver}&7: &f{message}"
+  # Console logging format for private messages
+  console-format: "[PM] {sender} -> {receiver}: {message}"
