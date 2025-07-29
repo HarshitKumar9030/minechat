@@ -1,4 +1,40 @@
 name: minechat
 version: '1.0-SNAPSHOT'
 main: me.harshit.minechat.Minechat
-api-version: '1.21'
+api-version: '1.20'
+description: Chat Plugin for minecraft
+author: Harshit
+
+commands:
+  minechat:
+    description: Main MineChat command for web password management
+    usage: /minechat <setpassword|removepassword|status|reload>
+    aliases: [mc, mchat]
+  msg:
+    description: Send a private message to a player
+    usage: /msg <player> <message>
+    aliases: [message]
+  pm:
+    description: Send a private message to a player
+    usage: /pm <player> <message>
+  tell:
+    description: Send a private message to a player
+    usage: /tell <player> <message>
+  whisper:
+    description: Send a private message to a player
+    usage: /whisper <player> <message>
+    aliases: [w]
+
+permissions:
+  minechat.admin:
+    description: Admin permissions for MineChat
+    default: op
+  minechat.use:
+    description: Basic usage permissions for MineChat
+    default: true
+  minechat.web:
+    description: Permission to set web passwords
+    default: true
+  minechat.pm:
+    description: Permission to send private messages
+    default: true
