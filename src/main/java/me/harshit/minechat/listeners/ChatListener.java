@@ -113,7 +113,7 @@ public class ChatListener implements Listener {
             }
         }
 
-        // Store in database for web sync (async)
+        // Store in db for web sync (async)
         if (databaseManager != null) {
             String finalFilteredMessage = filteredMessage;
             plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {

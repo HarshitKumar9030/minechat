@@ -7,10 +7,10 @@ import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.RegisteredServiceProvider;
 
-/**
- * Manages player ranks and prefixes from various permission plugins
- * Supports: LuckPerms, PowerRanks, PermissionsEx, GroupManager, and more via Vault
- */
+
+// Manages player ranks and prefixes from various permission plugins
+// Supports: LuckPerms, PowerRanks, PermissionsEx, GroupManager, and more via Vault
+ 
 public class RankManager {
 
     private final Minechat plugin;
