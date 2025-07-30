@@ -45,6 +45,7 @@ web:
   enable-api: true
   # web api port(you'll need this later)
   port: 8080
+  websocket-port: 8081
   # Enable CORS for web requests
   enable-cors: true
   # Require password authentication for web access

@@ -7,7 +7,6 @@ import me.harshit.minechat.database.FriendManager;
 import me.harshit.minechat.database.GroupManager;
 import me.harshit.minechat.database.UserDataManager;
 import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.format.NamedTextColor;
 import org.bson.Document;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
@@ -19,7 +18,6 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
-
 public class WebAPIHandler {
 
     private final Minechat plugin;
@@ -27,6 +25,7 @@ public class WebAPIHandler {
     private final FriendManager friendManager;
     private final GroupManager groupManager;
     private final Gson gson;
+    private MinechatWebSocketServer webSocketServer;
 
     // Store active web sessions for real-time updates
     private final Map<String, WebSession> activeSessions = new ConcurrentHashMap<>();
@@ -38,6 +37,11 @@ public class WebAPIHandler {
         this.friendManager = friendManager;
         this.groupManager = groupManager;
         this.gson = new Gson();
+
+        int wsPort = plugin.getConfig().getInt("web.websocket-port", 8081);
+        this.webSocketServer = new MinechatWebSocketServer(plugin, this, wsPort);
+        this.webSocketServer.start();
+
     }
 
     // handles incoming web msgs and routes them to appropriate handlers
@@ -45,8 +49,11 @@ public class WebAPIHandler {
         WebSession session = activeSessions.get(sessionId);
         if (session == null || !session.isAuthenticated()) {
             plugin.getLogger().warning("Unauthorized web message attempt from session: " + sessionId);
+            sendWebResponse(sessionId, "error", "Unauthorized access");
             return;
         }
+
+        plugin.getLogger().info("Handling web message: " + messageType + " from session: " + sessionId);
 
         switch (messageType.toLowerCase()) {
             case "friend_message":
@@ -69,12 +76,33 @@ public class WebAPIHandler {
                 handleGetGroupMessages(session, data);
                 break;
 
+            case "get_friend_requests":
+                handleGetFriendRequests(session);
+                break;
+
+            case "send_friend_request":
+                handleSendFriendRequest(session, data);
+                break;
+
+            case "accept_friend_request":
+                handleAcceptFriendRequest(session, data);
+                break;
+
+            case "reject_friend_request":
+                handleRejectFriendRequest(session, data);
+                break;
+
+            case "get_online_players":
+                handleGetOnlinePlayers(session);
+                break;
+
             default:
                 plugin.getLogger().warning("Unknown web message type: " + messageType);
+                sendWebResponse(sessionId, "error", "Unknown message type: " + messageType);
         }
     }
 
-   // Web friend msg handler
+    // Web friend msg handler
     private void handleWebFriendMessage(WebSession session, JsonObject data) {
         String targetName = data.get("target").getAsString();
         String message = data.get("message").getAsString();
@@ -114,11 +142,19 @@ public class WebAPIHandler {
                 target.sendMessage(messageComponent);
 
                 // Send confirmation back to web
-                sendWebResponse(session.getSessionId(), "message_sent", "Message delivered");
+                sendWebResponse(session.getSessionId(), "message_sent", Map.of(
+                    "type", "friend_message",
+                    "target", targetName,
+                    "message", message,
+                    "timestamp", System.currentTimeMillis()
+                ));
+
+                // Notify target's web sessions if they're online via web
+                broadcastMinecraftMessage(session.getPlayerId(), session.getPlayerName(),
+                    message, "friend_message", target.getUniqueId());
             });
         });
     }
-
 
     private void handleWebGroupMessage(WebSession session, JsonObject data) {
         String groupName = data.get("group").getAsString();
@@ -166,19 +202,24 @@ public class WebAPIHandler {
                 // Notify all web sessions in this group
                 broadcastToGroupWebSessions(groupId, "group_message", Map.of(
                     "group", groupName,
+                    "groupId", groupId.toString(),
                     "sender", session.getPlayerName(),
                     "message", message,
                     "timestamp", System.currentTimeMillis(),
                     "source", "web"
                 ));
 
-                sendWebResponse(session.getSessionId(), "message_sent", "Message sent to group");
+                sendWebResponse(session.getSessionId(), "message_sent", Map.of(
+                    "type", "group_message",
+                    "group", groupName,
+                    "message", message,
+                    "timestamp", System.currentTimeMillis()
+                ));
             });
         });
     }
 
-    // sends friends list to the web interfact
-
+    // sends friends list to the web interface
     private void handleGetFriends(WebSession session) {
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             List<Document> friends = friendManager.getFriendList(session.getPlayerId());
@@ -190,6 +231,7 @@ public class WebAPIHandler {
 
                 Map<String, Object> friendData = new HashMap<>();
                 friendData.put("name", friendName);
+                friendData.put("uuid", friend.getString("friendId"));
                 friendData.put("online", onlineFriend != null && onlineFriend.isOnline());
                 friendData.put("since", friend.getLong("timestamp"));
                 return friendData;
@@ -200,7 +242,6 @@ public class WebAPIHandler {
     }
 
     // send group list to web
-
     private void handleGetGroups(WebSession session) {
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             List<Document> groups = groupManager.getPlayerGroups(session.getPlayerId());
@@ -220,7 +261,7 @@ public class WebAPIHandler {
         });
     }
 
-   // recent group msgs
+    // recent group msgs
     private void handleGetGroupMessages(WebSession session, JsonObject data) {
         String groupId = data.get("groupId").getAsString();
         int limit = data.has("limit") ? data.get("limit").getAsInt() : 50;
@@ -230,12 +271,117 @@ public class WebAPIHandler {
 
             Map<String, Object> response = new HashMap<>();
             response.put("messages", messages);
+            response.put("groupId", groupId);
 
             sendWebResponse(session.getSessionId(), "group_messages", response);
         });
     }
 
-    // web session authentication
+    private void handleGetFriendRequests(WebSession session) {
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            List<Document> incomingRequests = friendManager.getIncomingFriendRequests(session.getPlayerId());
+            List<Document> outgoingRequests = friendManager.getOutgoingFriendRequests(session.getPlayerId());
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("incoming", incomingRequests);
+            response.put("outgoing", outgoingRequests);
+
+            sendWebResponse(session.getSessionId(), "friend_requests", response);
+        });
+    }
+
+    private void handleSendFriendRequest(WebSession session, JsonObject data) {
+        String targetName = data.get("targetName").getAsString();
+
+        Player target = Bukkit.getPlayerExact(targetName);
+        if (target == null) {
+            sendWebResponse(session.getSessionId(), "error", "Player not found");
+            return;
+        }
+
+        if (target.getUniqueId().equals(session.getPlayerId())) {
+            sendWebResponse(session.getSessionId(), "error", "You cannot send a friend request to yourself");
+            return;
+        }
+
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            boolean success = friendManager.sendFriendRequest(session.getPlayerId(), session.getPlayerName(),
+                target.getUniqueId(), target.getName());
+
+            if (success) {
+                sendWebResponse(session.getSessionId(), "friend_request_sent", Map.of(
+                    "targetName", targetName,
+                    "message", "Friend request sent successfully"
+                ));
+            } else {
+                sendWebResponse(session.getSessionId(), "error", "Failed to send friend request");
+            }
+        });
+    }
+
+    private void handleAcceptFriendRequest(WebSession session, JsonObject data) {
+        String requesterName = data.get("requesterName").getAsString();
+
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            Player requester = Bukkit.getPlayerExact(requesterName);
+            if (requester == null) {
+                sendWebResponse(session.getSessionId(), "error", "Requester not found");
+                return;
+            }
+
+            boolean success = friendManager.acceptFriendRequest(requester.getUniqueId(), session.getPlayerId());
+
+            if (success) {
+                sendWebResponse(session.getSessionId(), "friend_request_accepted", Map.of(
+                    "requesterName", requesterName,
+                    "message", "Friend request accepted"
+                ));
+            } else {
+                sendWebResponse(session.getSessionId(), "error", "Failed to accept friend request");
+            }
+        });
+    }
+
+    private void handleRejectFriendRequest(WebSession session, JsonObject data) {
+        String requesterName = data.get("requesterName").getAsString();
+
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            Player requester = Bukkit.getPlayerExact(requesterName);
+            if (requester == null) {
+                sendWebResponse(session.getSessionId(), "error", "Requester not found");
+                return;
+            }
+
+            boolean success = friendManager.rejectFriendRequest(requester.getUniqueId(), session.getPlayerId());
+
+            if (success) {
+                sendWebResponse(session.getSessionId(), "friend_request_rejected", Map.of(
+                    "requesterName", requesterName,
+                    "message", "Friend request rejected"
+                ));
+            } else {
+                sendWebResponse(session.getSessionId(), "error", "Failed to reject friend request");
+            }
+        });
+    }
+
+    private void handleGetOnlinePlayers(WebSession session) {
+        List<Map<String, Object>> onlinePlayers = new ArrayList<>();
+
+        for (Player player : Bukkit.getOnlinePlayers()) {
+            Map<String, Object> playerData = new HashMap<>();
+            playerData.put("name", player.getName());
+            playerData.put("uuid", player.getUniqueId().toString());
+            playerData.put("displayName", player.getDisplayName());
+            onlinePlayers.add(playerData);
+        }
+
+        sendWebResponse(session.getSessionId(), "online_players", Map.of(
+            "players", onlinePlayers,
+            "count", onlinePlayers.size()
+        ));
+    }
+
     public boolean authenticateSession(String sessionId, String username, String password) {
         if (!userDataManager.verifyWebPassword(username, password)) {
             return false;
@@ -255,15 +401,18 @@ public class WebAPIHandler {
         return true;
     }
 
-    // remove web session
     public void removeSession(String sessionId) {
-        activeSessions.remove(sessionId);
+        WebSession session = activeSessions.remove(sessionId);
+        if (session != null) {
+            plugin.getLogger().info("Removed web session: " + sessionId + " for player: " + session.getPlayerName());
+        }
     }
 
     // broadcasts a message from Minecraft to web clients
     public void broadcastMinecraftMessage(UUID senderId, String senderName, String message, String type, Object context) {
         Map<String, Object> data = new HashMap<>();
         data.put("sender", senderName);
+        data.put("senderId", senderId.toString());
         data.put("message", message);
         data.put("timestamp", System.currentTimeMillis());
         data.put("source", "minecraft");
@@ -278,27 +427,28 @@ public class WebAPIHandler {
 
             case "group_message":
                 UUID groupId = (UUID) context;
+                data.put("groupId", groupId.toString());
                 broadcastToGroupWebSessions(groupId, "group_message", data);
                 break;
         }
     }
 
-
     private void sendWebResponse(String sessionId, String type, Object data) {
-        // todo: Implement actual web communication using WebSocket or Server-Sent Events
-        // For now, we'll use a simple session-based response system
+        if (MinechatWebSocketHandler.isSessionConnected(sessionId)) {
+            MinechatWebSocketHandler.sendToSession(sessionId, type, data);
+            plugin.getLogger().info("WebSocket response sent for session " + sessionId + ": " + type);
+            return;
+        }
 
         try {
             WebSession session = activeSessions.get(sessionId);
             if (session != null) {
-                // Create response object
                 Map<String, Object> response = new HashMap<>();
                 response.put("type", type);
                 response.put("data", data);
                 response.put("timestamp", System.currentTimeMillis());
                 response.put("sessionId", sessionId);
 
-                // Store response in session for retrieval
                 session.addResponse(response);
 
                 plugin.getLogger().info("Web response queued for session " + sessionId + ": " + type);
@@ -311,7 +461,6 @@ public class WebAPIHandler {
     }
 
     private void broadcastToGroupWebSessions(UUID groupId, String type, Object data) {
-        // Find all web sessions that are members of this group
         activeSessions.values().stream()
             .filter(session -> isPlayerInGroup(session.getPlayerId(), groupId))
             .forEach(session -> sendWebResponse(session.getSessionId(), type, data));
@@ -324,9 +473,49 @@ public class WebAPIHandler {
     }
 
     private UUID getPlayerUUID(String playerName) {
-        // You'd implement this to get UUID from database or Bukkit
+        // First try to get from online players
         Player player = Bukkit.getPlayerExact(playerName);
-        return player != null ? player.getUniqueId() : null;
+        if (player != null) {
+            return player.getUniqueId();
+        }
+
+        try {
+            UUID playerUUID = userDataManager.getPlayerUUIDByName(playerName);
+            if (playerUUID != null) {
+                return playerUUID;
+            }
+
+            // if not found(which is rare), try to get from offline players using bukkit api
+            org.bukkit.OfflinePlayer offlinePlayer = Bukkit.getOfflinePlayer(playerName);
+            if (offlinePlayer.hasPlayedBefore()) {
+                return offlinePlayer.getUniqueId();
+            }
+
+            plugin.getLogger().warning("Could not find UUID for player: " + playerName);
+            return null;
+
+        } catch (Exception e) {
+            plugin.getLogger().warning("Error getting UUID for player " + playerName + ": " + e.getMessage());
+            return null;
+        }
+    }
+
+    public void shutdown() {
+        if (webSocketServer != null) {
+            try {
+                webSocketServer.stop();
+            } catch (Exception e) {
+                plugin.getLogger().warning("Error stopping WebSocket server: " + e.getMessage());
+            }
+        }
+    }
+
+    public int getActiveSessionsCount() {
+        return activeSessions.size();
+    }
+
+    public int getWebSocketConnectionsCount() {
+        return MinechatWebSocketHandler.getActiveSessionIds().size();
     }
 
 // Represents a web session for a player

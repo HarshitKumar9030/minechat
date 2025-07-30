@@ -169,7 +169,8 @@ public class FriendManager {
     }
 
 
-    public List<Document> getPendingRequests(UUID playerUUID) {
+
+    public List<Document> getIncomingFriendRequests(UUID playerUUID) {
         try {
             List<Document> requests = new ArrayList<>();
             friendRequestsCollection.find(
@@ -178,21 +179,48 @@ public class FriendManager {
             ).into(requests);
             return requests;
         } catch (Exception e) {
-            plugin.getLogger().warning("Failed to get pending requests: " + e.getMessage());
+            plugin.getLogger().warning("Failed to get incoming friend requests: " + e.getMessage());
             return new ArrayList<>();
         }
     }
 
 
-    public boolean areFriends(UUID player1UUID, UUID player2UUID) {
+    public List<Document> getOutgoingFriendRequests(UUID playerUUID) {
         try {
-            Document friendship = friendsCollection.find(
-                new Document("playerUUID", player1UUID.toString())
-                    .append("friendUUID", player2UUID.toString())
-            ).first();
-            return friendship != null;
+            List<Document> requests = new ArrayList<>();
+            friendRequestsCollection.find(
+                new Document("senderUUID", playerUUID.toString())
+                    .append("status", "pending")
+            ).into(requests);
+            return requests;
         } catch (Exception e) {
-            return false;
+            plugin.getLogger().warning("Failed to get outgoing friend requests: " + e.getMessage());
+            return new ArrayList<>();
+        }
+    }
+
+
+
+    public List<Document> getPendingRequests(UUID playerUUID) {
+        try {
+            List<Document> requests = new ArrayList<>();
+
+            // Get incoming requests (requests sent TO this player)
+            friendRequestsCollection.find(
+                new Document("targetUUID", playerUUID.toString())
+                    .append("status", "pending")
+            ).into(requests);
+
+            // Get outgoing requests (requests sent BY this player)
+            friendRequestsCollection.find(
+                new Document("senderUUID", playerUUID.toString())
+                    .append("status", "pending")
+            ).into(requests);
+
+            return requests;
+        } catch (Exception e) {
+            plugin.getLogger().warning("Failed to get pending friend requests: " + e.getMessage());
+            return new ArrayList<>();
         }
     }
 
@@ -203,7 +231,23 @@ public class FriendManager {
                 new Document("playerUUID", playerUUID.toString())
             );
         } catch (Exception e) {
+            plugin.getLogger().warning("Failed to get friend count: " + e.getMessage());
             return 0;
+        }
+    }
+
+
+    public boolean areFriends(UUID playerUUID, UUID friendUUID) {
+        try {
+            Document friendship = friendsCollection.find(
+                new Document("playerUUID", playerUUID.toString())
+                    .append("friendUUID", friendUUID.toString())
+            ).first();
+
+            return friendship != null;
+        } catch (Exception e) {
+            plugin.getLogger().warning("Failed to check friendship status: " + e.getMessage());
+            return false;
         }
     }
 }
