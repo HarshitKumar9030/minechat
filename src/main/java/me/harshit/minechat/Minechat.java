@@ -65,7 +65,7 @@ public final class Minechat extends JavaPlugin {
 
         // Initialize command handlers
         commandHandler = new ChatCommandHandler(this, databaseManager, userDataManager, friendManager);
-        friendCommandHandler = new FriendCommandHandler(this, friendManager);
+        friendCommandHandler = new FriendCommandHandler(this, friendManager, userDataManager);
         groupCommandHandler = new GroupCommandHandler(this, groupManager);
 
         getServer().getPluginManager().registerEvents(chatListener, this);
@@ -76,10 +76,9 @@ public final class Minechat extends JavaPlugin {
 
         // Success message
         getLogger().info("✓ MineChat enabled successfully!");
-        getLogger().info("✓ Chat messages will be logged to MongoDB");
 
         // Notify online players that the plugin is active
-        getServer().broadcast(Component.text("MineChat is now active! Enhanced chat features enabled.")
+        getServer().broadcast(Component.text("MineChat is now active!")
                 .color(NamedTextColor.GREEN));
     }
 

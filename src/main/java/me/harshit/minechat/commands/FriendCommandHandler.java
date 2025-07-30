@@ -2,6 +2,7 @@ package me.harshit.minechat.commands;
 
 import me.harshit.minechat.Minechat;
 import me.harshit.minechat.database.FriendManager;
+import me.harshit.minechat.database.UserDataManager;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.ClickEvent;
 import net.kyori.adventure.text.format.NamedTextColor;
@@ -17,16 +18,19 @@ import org.bukkit.entity.Player;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.UUID;
 
 // friends command handler
 public class FriendCommandHandler implements CommandExecutor, TabCompleter {
 
     private final Minechat plugin;
     private final FriendManager friendManager;
+    private final UserDataManager userDataManager;
 
-    public FriendCommandHandler(Minechat plugin, FriendManager friendManager) {
+    public FriendCommandHandler(Minechat plugin, FriendManager friendManager, UserDataManager userDataManager) {
         this.plugin = plugin;
         this.friendManager = friendManager;
+        this.userDataManager = userDataManager;
     }
 
     @Override
@@ -86,9 +90,9 @@ public class FriendCommandHandler implements CommandExecutor, TabCompleter {
 
     private void showFriendHelp(Player player) {
         player.sendMessage(Component.text(""));
-        player.sendMessage(Component.text("══════════════════════════════").color(NamedTextColor.GOLD));
+        player.sendMessage(Component.text("════════════════════════").color(NamedTextColor.GOLD));
         player.sendMessage(Component.text("        Friend System        ").color(NamedTextColor.GOLD).decorate(TextDecoration.BOLD));
-        player.sendMessage(Component.text("══════════════════════════════").color(NamedTextColor.GOLD));
+        player.sendMessage(Component.text("════════════════════════").color(NamedTextColor.GOLD));
         player.sendMessage(Component.text(""));
 
         player.sendMessage(Component.text("👥 Friend Management:").color(NamedTextColor.YELLOW).decorate(TextDecoration.BOLD));
@@ -117,7 +121,7 @@ public class FriendCommandHandler implements CommandExecutor, TabCompleter {
         player.sendMessage(Component.text("    View pending friend requests").color(NamedTextColor.GRAY));
         player.sendMessage(Component.text(""));
 
-        player.sendMessage(Component.text("══════════════════════════════").color(NamedTextColor.GOLD));
+        player.sendMessage(Component.text("════════════════════════").color(NamedTextColor.GOLD));
         player.sendMessage(Component.text(""));
     }
 
@@ -129,14 +133,8 @@ public class FriendCommandHandler implements CommandExecutor, TabCompleter {
         }
 
         String targetName = args[1];
-        Player target = Bukkit.getPlayer(targetName);
 
-        if (target == null || !target.isOnline()) {
-            player.sendMessage(Component.text("Player '" + targetName + "' is not online!").color(NamedTextColor.RED));
-            return true;
-        }
-
-        if (target.equals(player)) {
+        if (targetName.equalsIgnoreCase(player.getName())) {
             player.sendMessage(Component.text("You can't add yourself as a friend!").color(NamedTextColor.RED));
             return true;
         }
@@ -151,30 +149,45 @@ public class FriendCommandHandler implements CommandExecutor, TabCompleter {
         }
 
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            // Look up the target player in the database
+            UUID targetUUID = userDataManager.getPlayerUUIDByName(targetName);
+
+            if (targetUUID == null) {
+                Bukkit.getScheduler().runTask(plugin, () -> {
+                    player.sendMessage(Component.text("Player '" + targetName + "' has never joined this server!").color(NamedTextColor.RED));
+                });
+                return;
+            }
+
             boolean success = friendManager.sendFriendRequest(
                 player.getUniqueId(), player.getName(),
-                target.getUniqueId(), target.getName()
+                targetUUID, targetName
             );
 
             Bukkit.getScheduler().runTask(plugin, () -> {
                 if (success) {
-                    player.sendMessage(Component.text("✓ Friend request sent to " + target.getName() + "!").color(NamedTextColor.GREEN));
+                    player.sendMessage(Component.text("✓ Friend request sent to " + targetName + "!").color(NamedTextColor.GREEN));
 
-                    // Notify the target player
-                    Component requestMessage = Component.text("🤝 " + player.getName() + " sent you a friend request! ")
-                            .color(NamedTextColor.YELLOW)
-                            .append(Component.text("[Accept]")
-                                    .color(NamedTextColor.GREEN)
-                                    .clickEvent(ClickEvent.runCommand("/friend accept " + player.getName())))
-                            .append(Component.text(" "))
-                            .append(Component.text("[Deny]")
-                                    .color(NamedTextColor.RED)
-                                    .clickEvent(ClickEvent.runCommand("/friend deny " + player.getName())));
+                    // Notify the target player if they're online
+                    Player target = Bukkit.getPlayerExact(targetName);
+                    if (target != null && target.isOnline()) {
+                        Component requestMessage = Component.text("🤝 " + player.getName() + " sent you a friend request! ")
+                                .color(NamedTextColor.YELLOW)
+                                .append(Component.text("[Accept]")
+                                        .color(NamedTextColor.GREEN)
+                                        .clickEvent(ClickEvent.runCommand("/friend accept " + player.getName())))
+                                .append(Component.text(" "))
+                                .append(Component.text("[Deny]")
+                                        .color(NamedTextColor.RED)
+                                        .clickEvent(ClickEvent.runCommand("/friend deny " + player.getName())));
 
-                    target.sendMessage(requestMessage);
+                        target.sendMessage(requestMessage);
+                    } else {
+                        player.sendMessage(Component.text("They will be notified when they come online.").color(NamedTextColor.GRAY));
+                    }
                 } else {
-                    if (friendManager.areFriends(player.getUniqueId(), target.getUniqueId())) {
-                        player.sendMessage(Component.text("You're already friends with " + target.getName() + "!").color(NamedTextColor.YELLOW));
+                    if (friendManager.areFriends(player.getUniqueId(), targetUUID)) {
+                        player.sendMessage(Component.text("You're already friends with " + targetName + "!").color(NamedTextColor.YELLOW));
                     } else {
                         player.sendMessage(Component.text("Friend request already pending or failed to send.").color(NamedTextColor.RED));
                     }

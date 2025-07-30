@@ -103,6 +103,30 @@ public class UserDataManager {
     }
 
 
+    public UUID getPlayerUUIDByName(String playerName) {
+        try {
+            Document userDoc = userCollection.find(new Document("playerName", playerName)).first();
+            if (userDoc != null) {
+                return UUID.fromString(userDoc.getString("playerUUID"));
+            }
+            return null;
+        } catch (Exception e) {
+            plugin.getLogger().warning("Failed to look up player UUID for " + playerName + ": " + e.getMessage());
+            return null;
+        }
+    }
+
+    // returns true if player has joined even once means they exist in the db
+    public boolean playerExists(String playerName) {
+        try {
+            Document userDoc = userCollection.find(new Document("playerName", playerName)).first();
+            return userDoc != null;
+        } catch (Exception e) {
+            plugin.getLogger().warning("Failed to check if player exists " + playerName + ": " + e.getMessage());
+            return false;
+        }
+    }
+
     private String hashPassword(String password) {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");

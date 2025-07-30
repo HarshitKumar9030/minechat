@@ -190,19 +190,23 @@ public class GroupCommandHandler implements CommandExecutor, TabCompleter {
 
         String groupName = args[1];
         String targetName = args[2];
-        Player target = Bukkit.getPlayer(targetName);
 
-        if (target == null || !target.isOnline()) {
-            player.sendMessage(Component.text("Player '" + targetName + "' is not online!").color(NamedTextColor.RED));
-            return true;
-        }
-
-        if (target.equals(player)) {
+        if (targetName.equalsIgnoreCase(player.getName())) {
             player.sendMessage(Component.text("You can't invite yourself!").color(NamedTextColor.RED));
             return true;
         }
 
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            // Target player lookup from db
+            UUID targetUUID = plugin.getUserDataManager().getPlayerUUIDByName(targetName);
+
+            if (targetUUID == null) {
+                Bukkit.getScheduler().runTask(plugin, () -> {
+                    player.sendMessage(Component.text("Player '" + targetName + "' has never joined this server!").color(NamedTextColor.RED));
+                });
+                return;
+            }
+
             // Find the group
             Document group = findGroupByName(groupName, player.getUniqueId());
             if (group == null) {
@@ -214,24 +218,29 @@ public class GroupCommandHandler implements CommandExecutor, TabCompleter {
 
             UUID groupId = UUID.fromString(group.getString("groupId"));
             boolean success = groupManager.sendGroupInvite(groupId, player.getUniqueId(), player.getName(),
-                                                         target.getUniqueId(), target.getName());
+                                                         targetUUID, targetName);
 
             Bukkit.getScheduler().runTask(plugin, () -> {
                 if (success) {
-                    player.sendMessage(Component.text("✓ Invitation sent to " + target.getName() + "!").color(NamedTextColor.GREEN));
+                    player.sendMessage(Component.text("✓ Invitation sent to " + targetName + "!").color(NamedTextColor.GREEN));
 
-                    // Notify the target player
-                    Component inviteMessage = Component.text("🎉 " + player.getName() + " invited you to group '" + groupName + "'! ") // god I hate emojis T_T
-                            .color(NamedTextColor.YELLOW)
-                            .append(Component.text("[Accept]")
-                                    .color(NamedTextColor.GREEN)
-                                    .clickEvent(ClickEvent.runCommand("/group accept " + groupName)))
-                            .append(Component.text(" "))
-                            .append(Component.text("[Deny]")
-                                    .color(NamedTextColor.RED)
-                                    .clickEvent(ClickEvent.runCommand("/group deny " + groupName)));
+                    // Notify target player if they're online
+                    Player target = Bukkit.getPlayerExact(targetName);
+                    if (target != null && target.isOnline()) {
+                        Component inviteMessage = Component.text("🎉 " + player.getName() + " invited you to group '" + groupName + "'! ")
+                                .color(NamedTextColor.YELLOW)
+                                .append(Component.text("[Accept]")
+                                        .color(NamedTextColor.GREEN)
+                                        .clickEvent(ClickEvent.runCommand("/group accept " + groupName)))
+                                .append(Component.text(" "))
+                                .append(Component.text("[Deny]")
+                                        .color(NamedTextColor.RED)
+                                        .clickEvent(ClickEvent.runCommand("/group deny " + groupName)));
 
-                    target.sendMessage(inviteMessage);
+                        target.sendMessage(inviteMessage);
+                    } else {
+                        player.sendMessage(Component.text("They will be notified when they come online.").color(NamedTextColor.GRAY));
+                    }
                 } else {
                     player.sendMessage(Component.text("✗ Failed to send invitation. Player might already be invited.").color(NamedTextColor.RED));
                 }
