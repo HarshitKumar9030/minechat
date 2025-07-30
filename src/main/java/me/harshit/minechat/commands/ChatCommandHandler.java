@@ -138,6 +138,9 @@ public class ChatCommandHandler implements CommandExecutor, TabCompleter {
             case "reload":
                 return handleReload(sender);
 
+            case "rankdebug":
+                return handleRankDebug(sender, args);
+
             default:
                 sender.sendMessage(Component.text("Unknown command. Use /minechat for help.").color(NamedTextColor.RED));
                 return true;
@@ -410,6 +413,51 @@ public class ChatCommandHandler implements CommandExecutor, TabCompleter {
                 }
             });
         });
+
+        return true;
+    }
+
+    private boolean handleRankDebug(CommandSender sender, String[] args) {
+        if (!sender.hasPermission("minechat.ranks.debug")) {
+            sender.sendMessage(Component.text("You don't have permission to use this command!").color(NamedTextColor.RED));
+            return true;
+        }
+
+        if (args.length < 2) {
+            // Show general rank system info
+            sender.sendMessage(Component.text("=== Rank System Debug Info ===").color(NamedTextColor.AQUA));
+            sender.sendMessage(Component.text(plugin.getRankManager().getDebugInfo()).color(NamedTextColor.WHITE));
+            sender.sendMessage(Component.text("Usage: /minechat rankdebug <player> - Debug specific player").color(NamedTextColor.GRAY));
+            return true;
+        }
+
+        String targetName = args[1];
+        Player target = Bukkit.getPlayer(targetName);
+
+        if (target == null) {
+            sender.sendMessage(Component.text("Player not found: " + targetName).color(NamedTextColor.RED));
+            return true;
+        }
+
+        // Show detailed rank info for the target player
+        sender.sendMessage(Component.text("=== Rank Debug for " + target.getName() + " ===").color(NamedTextColor.AQUA));
+
+        String playerRank = plugin.getRankManager().getPlayerRank(target);
+        String formattedRank = plugin.getRankManager().getFormattedRank(target);
+
+        sender.sendMessage(Component.text("Raw Rank: '" + playerRank + "'").color(NamedTextColor.WHITE));
+        sender.sendMessage(Component.text("Formatted Rank: '" + formattedRank + "'").color(NamedTextColor.WHITE));
+        sender.sendMessage(Component.text("Rank System Available: " + plugin.getRankManager().isRankSystemAvailable()).color(NamedTextColor.WHITE));
+
+        // show the target player's chat msg format
+        String chatFormat = plugin.getConfig().getString("chat.format", "{rank}{player}: {message}");
+        String sampleMessage = chatFormat
+                .replace("{rank}", formattedRank)
+                .replace("{player}", target.getName())
+                .replace("{message}", "Hello World!")
+                .replace("&", "§");
+
+        sender.sendMessage(Component.text("Sample Chat: " + sampleMessage).color(NamedTextColor.YELLOW));
 
         return true;
     }

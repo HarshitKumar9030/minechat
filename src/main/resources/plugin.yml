@@ -2,13 +2,16 @@ name: minechat
 version: '1.0-SNAPSHOT'
 main: me.harshit.minechat.Minechat
 api-version: '1.20'
-description:  Chat plugin with MongoDB integration, web interface, friend system, and chat groups
+description: Chat plugin with MongoDB integration, web interface, friend system, chat groups, and rank support
 author: Harshit
+
+# Soft dependencies for rank plugin integration
+softdepend: [Vault, LuckPerms, PowerRanks, PermissionsEx, GroupManager]
 
 commands:
   minechat:
-    description: Main MineChat command for web password management
-    usage: /minechat <setpassword|removepassword|status|reload>
+    description: Main MineChat command for web password management and rank debugging
+    usage: /minechat <setpassword|removepassword|status|reload|rankdebug>
     aliases: [mc, mchat]
   msg:
     description: Send a private message to a player
@@ -50,21 +53,21 @@ permissions:
   minechat.pm:
     description: Permission to send private messages
     default: true
-  minechat.friends:
-    description: Permission to use friend system
-    default: true
   minechat.friends.add:
     description: Permission to send friend requests
     default: true
   minechat.friends.unlimited:
-    description: Bypass friend limits (for VIP players)
+    description: Bypass friend limits
     default: op
-  minechat.groups:
-    description: Permission to use group system
-    default: true
   minechat.groups.create:
     description: Permission to create groups
     default: true
   minechat.groups.unlimited:
-    description: Bypass group limits (for VIP players)
+    description: Bypass group limits
+    default: op
+  minechat.ranks.debug:
+    description: Permission to use rank debugging commands
+    default: op
+  minechat.bypass.filter:
+    description: Bypass chat filter
     default: op

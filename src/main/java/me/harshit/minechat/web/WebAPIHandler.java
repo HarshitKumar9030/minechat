@@ -12,6 +12,7 @@ import org.bson.Document;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -259,7 +260,7 @@ public class WebAPIHandler {
         activeSessions.remove(sessionId);
     }
 
-    // Broadcasts a message from Minecraft to web clients
+    // broadcasts a message from Minecraft to web clients
     public void broadcastMinecraftMessage(UUID senderId, String senderName, String message, String type, Object context) {
         Map<String, Object> data = new HashMap<>();
         data.put("sender", senderName);
@@ -284,9 +285,29 @@ public class WebAPIHandler {
 
 
     private void sendWebResponse(String sessionId, String type, Object data) {
-        // todo: Implement actual web communication here
-        // For now just logging it
-        plugin.getLogger().info("Web response to " + sessionId + ": " + type + " - " + gson.toJson(data));
+        // todo: Implement actual web communication using WebSocket or Server-Sent Events
+        // For now, we'll use a simple session-based response system
+
+        try {
+            WebSession session = activeSessions.get(sessionId);
+            if (session != null) {
+                // Create response object
+                Map<String, Object> response = new HashMap<>();
+                response.put("type", type);
+                response.put("data", data);
+                response.put("timestamp", System.currentTimeMillis());
+                response.put("sessionId", sessionId);
+
+                // Store response in session for retrieval
+                session.addResponse(response);
+
+                plugin.getLogger().info("Web response queued for session " + sessionId + ": " + type);
+            } else {
+                plugin.getLogger().warning("Attempted to send response to inactive session: " + sessionId);
+            }
+        } catch (Exception e) {
+            plugin.getLogger().warning("Failed to send web response: " + e.getMessage());
+        }
     }
 
     private void broadcastToGroupWebSessions(UUID groupId, String type, Object data) {
@@ -314,17 +335,37 @@ public class WebAPIHandler {
         private final UUID playerId;
         private final String playerName;
         private final boolean authenticated;
+        private final List<Map<String, Object>> responseQueue;
 
         public WebSession(String sessionId, UUID playerId, String playerName, boolean authenticated) {
             this.sessionId = sessionId;
             this.playerId = playerId;
             this.playerName = playerName;
             this.authenticated = authenticated;
+            this.responseQueue = new ArrayList<>();
         }
 
         public String getSessionId() { return sessionId; }
         public UUID getPlayerId() { return playerId; }
         public String getPlayerName() { return playerName; }
         public boolean isAuthenticated() { return authenticated; }
+
+        public void addResponse(Map<String, Object> response) {
+            synchronized (responseQueue) {
+                responseQueue.add(response);
+                // Keep only last 100 responses to prevent memory leaks
+                if (responseQueue.size() > 100) {
+                    responseQueue.remove(0);
+                }
+            }
+        }
+
+        public List<Map<String, Object>> getAndClearResponses() {
+            synchronized (responseQueue) {
+                List<Map<String, Object>> responses = new ArrayList<>(responseQueue);
+                responseQueue.clear();
+                return responses;
+            }
+        }
     }
 }

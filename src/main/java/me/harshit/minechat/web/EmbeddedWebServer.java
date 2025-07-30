@@ -18,7 +18,6 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -60,9 +59,18 @@ public class EmbeddedWebServer {
             server.createContext("/api/groups", new GroupsHandler());
             server.createContext("/api/messages", new MessagesHandler());
             server.createContext("/api/send-message", new SendMessageHandler());
-            // todo: make more friends and groups endpoints
+            server.createContext("/api/send-friend-request", new SendFriendRequestHandler());
+            server.createContext("/api/accept-friend-request", new AcceptFriendRequestHandler());
+            server.createContext("/api/reject-friend-request", new RejectFriendRequestHandler());
+            server.createContext("/api/remove-friend", new RemoveFriendHandler());
+            server.createContext("/api/create-group", new CreateGroupHandler());
+            server.createContext("/api/join-group", new JoinGroupHandler());
+            server.createContext("/api/leave-group", new LeaveGroupHandler());
+            server.createContext("/api/ranks", new RanksHandler());
+            server.createContext("/api/users", new UsersHandler());
+            server.createContext("/api/friend-requests", new FriendRequestsHandler());
 
-            // nothing more than just a test endpoint
+            // nothing just a test endpoint
             server.createContext("/api/test", new TestHandler());
 
             server.start();
@@ -77,10 +85,8 @@ public class EmbeddedWebServer {
         } catch (IOException e) {
             plugin.getLogger().severe("Failed to start web server on port " + port + ": " + e.getMessage());
             plugin.getLogger().severe("Make sure port " + port + " is not in use by another application");
-            e.printStackTrace();
         } catch (Exception e) {
             plugin.getLogger().severe("Unexpected error starting web server: " + e.getMessage());
-            e.printStackTrace();
         }
     }
 
@@ -119,7 +125,7 @@ public class EmbeddedWebServer {
                     String username = json.get("username").getAsString();
                     String password = json.get("password").getAsString();
 
-                    // Verify credentials
+                    // verify creds
                     boolean isValid = userDataManager.verifyWebPassword(username, password);
 
                     Map<String, Object> response = new HashMap<>();
@@ -127,13 +133,32 @@ public class EmbeddedWebServer {
                         Player player = Bukkit.getPlayerExact(username);
                         UUID playerUUID = player != null ? player.getUniqueId() : getPlayerUUID(username);
 
+                        // get rank info
+                        String rank = "";
+                        String formattedRank = "";
+                        boolean isOnline = false;
+
+                        if (player != null && player.isOnline()) {
+                            rank = plugin.getRankManager().getPlayerRank(player);
+                            formattedRank = plugin.getRankManager().getFormattedRank(player);
+                            isOnline = true;
+                        }
+
                         response.put("success", true);
                         response.put("user", Map.of(
                             "playerUUID", playerUUID.toString(),
                             "playerName", username,
-                            "webAccessEnabled", true
+                            "webAccessEnabled", true,
+                            "rank", rank,
+                            "formattedRank", formattedRank,
+                            "online", isOnline,
+                            "loginTime", System.currentTimeMillis()
                         ));
                         response.put("sessionToken", UUID.randomUUID().toString());
+
+                        // Log successful authentication with rank info
+                        plugin.getLogger().info("Web authentication successful for " + username +
+                            (isOnline ? " (Online, Rank: " + rank + ")" : " (Offline)"));
                     } else {
                         response.put("success", false);
                         response.put("error", "Invalid credentials");
@@ -313,6 +338,345 @@ public class EmbeddedWebServer {
         }
     }
 
+    private class RanksHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            new CORSHandler().handle(exchange);
+
+            if ("GET".equals(exchange.getRequestMethod())) {
+                try {
+                    List<Document> ranks = userDataManager.getAllRanks();
+                    Map<String, Object> response = Map.of("ranks", ranks);
+                    sendJsonResponse(exchange, response, 200);
+
+                } catch (Exception e) {
+                    sendErrorResponse(exchange, "Internal server error", 500);
+                }
+            } else {
+                sendErrorResponse(exchange, "Method not allowed", 405);
+            }
+        }
+    }
+
+    private class UsersHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            new CORSHandler().handle(exchange);
+
+            if ("GET".equals(exchange.getRequestMethod())) {
+                try {
+                    String query = exchange.getRequestURI().getQuery();
+                    String playerUUID = getQueryParam(query, "playerUUID");
+
+                    if (playerUUID == null) {
+                        sendErrorResponse(exchange, "Player UUID required", 400);
+                        return;
+                    }
+
+                    Document user = userDataManager.getUserData(UUID.fromString(playerUUID));
+                    Map<String, Object> response = Map.of("user", user);
+                    sendJsonResponse(exchange, response, 200);
+
+                } catch (Exception e) {
+                    sendErrorResponse(exchange, "Internal server error", 500);
+                }
+            } else {
+                sendErrorResponse(exchange, "Method not allowed", 405);
+            }
+        }
+    }
+
+    // more api handlers to handle offline friend requests, group management, etc.
+    private class SendFriendRequestHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            new CORSHandler().handle(exchange);
+
+            if ("POST".equals(exchange.getRequestMethod())) {
+                try {
+                    String requestBody = readRequestBody(exchange);
+                    JsonObject json = gson.fromJson(requestBody, JsonObject.class);
+
+                    String senderUUID = json.get("senderUUID").getAsString();
+                    String senderName = json.get("senderName").getAsString();
+                    String targetName = json.get("targetName").getAsString();
+
+                    // Check if target player exists in database
+                    if (!userDataManager.playerExists(targetName)) {
+                        sendErrorResponse(exchange, "Player not found", 404);
+                        return;
+                    }
+
+                    UUID targetUUID = userDataManager.getPlayerUUIDByName(targetName);
+                    boolean success = friendManager.sendFriendRequest(
+                        UUID.fromString(senderUUID), senderName, targetUUID, targetName
+                    );
+
+                    if (success) {
+                        // Notify online target player if they're online
+                        Player targetPlayer = Bukkit.getPlayerExact(targetName);
+                        if (targetPlayer != null && targetPlayer.isOnline()) {
+                            targetPlayer.sendMessage("§aYou received a friend request from " + senderName + " (via web)");
+                        }
+
+                        Map<String, Object> response = Map.of("success", true, "message", "Friend request sent");
+                        sendJsonResponse(exchange, response, 200);
+                    } else {
+                        sendErrorResponse(exchange, "Failed to send friend request", 400);
+                    }
+
+                } catch (Exception e) {
+                    sendErrorResponse(exchange, "Internal server error", 500);
+                }
+            } else {
+                sendErrorResponse(exchange, "Method not allowed", 405);
+            }
+        }
+    }
+
+    private class AcceptFriendRequestHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            new CORSHandler().handle(exchange);
+
+            if ("POST".equals(exchange.getRequestMethod())) {
+                try {
+                    String requestBody = readRequestBody(exchange);
+                    JsonObject json = gson.fromJson(requestBody, JsonObject.class);
+
+                    String playerUUID = json.get("playerUUID").getAsString();
+                    String requesterUUID = json.get("requesterUUID").getAsString();
+
+                    boolean success = friendManager.acceptFriendRequest(
+                        UUID.fromString(playerUUID), UUID.fromString(requesterUUID)
+                    );
+
+                    if (success) {
+                        // Get requester name and notify if online
+                        String requesterName = getPlayerNameByUUID(UUID.fromString(requesterUUID));
+                        Player requesterPlayer = Bukkit.getPlayerExact(requesterName);
+                        if (requesterPlayer != null && requesterPlayer.isOnline()) {
+                            String playerName = getPlayerNameByUUID(UUID.fromString(playerUUID));
+                            requesterPlayer.sendMessage("§a" + playerName + " accepted your friend request!");
+                        }
+
+                        Map<String, Object> response = Map.of("success", true, "message", "Friend request accepted");
+                        sendJsonResponse(exchange, response, 200);
+                    } else {
+                        sendErrorResponse(exchange, "Failed to accept friend request", 400);
+                    }
+
+                } catch (Exception e) {
+                    sendErrorResponse(exchange, "Internal server error", 500);
+                }
+            } else {
+                sendErrorResponse(exchange, "Method not allowed", 405);
+            }
+        }
+    }
+
+    private class RejectFriendRequestHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            new CORSHandler().handle(exchange);
+
+            if ("POST".equals(exchange.getRequestMethod())) {
+                try {
+                    String requestBody = readRequestBody(exchange);
+                    JsonObject json = gson.fromJson(requestBody, JsonObject.class);
+
+                    String playerUUID = json.get("playerUUID").getAsString();
+                    String requesterUUID = json.get("requesterUUID").getAsString();
+
+                    boolean success = friendManager.rejectFriendRequest(
+                        UUID.fromString(playerUUID), UUID.fromString(requesterUUID)
+                    );
+
+                    Map<String, Object> response = Map.of("success", success);
+                    sendJsonResponse(exchange, response, success ? 200 : 400);
+
+                } catch (Exception e) {
+                    sendErrorResponse(exchange, "Internal server error", 500);
+                }
+            } else {
+                sendErrorResponse(exchange, "Method not allowed", 405);
+            }
+        }
+    }
+
+    private class RemoveFriendHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            new CORSHandler().handle(exchange);
+
+            if ("POST".equals(exchange.getRequestMethod())) {
+                try {
+                    String requestBody = readRequestBody(exchange);
+                    JsonObject json = gson.fromJson(requestBody, JsonObject.class);
+
+                    String playerUUID = json.get("playerUUID").getAsString();
+                    String friendUUID = json.get("friendUUID").getAsString();
+
+                    boolean success = friendManager.removeFriend(
+                        UUID.fromString(playerUUID), UUID.fromString(friendUUID)
+                    );
+
+                    Map<String, Object> response = Map.of("success", success);
+                    sendJsonResponse(exchange, response, success ? 200 : 400);
+
+                } catch (Exception e) {
+                    sendErrorResponse(exchange, "Internal server error", 500);
+                }
+            } else {
+                sendErrorResponse(exchange, "Method not allowed", 405);
+            }
+        }
+    }
+
+    private class CreateGroupHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            new CORSHandler().handle(exchange);
+
+            if ("POST".equals(exchange.getRequestMethod())) {
+                try {
+                    String requestBody = readRequestBody(exchange);
+                    JsonObject json = gson.fromJson(requestBody, JsonObject.class);
+
+                    String creatorUUID = json.get("creatorUUID").getAsString();
+                    String creatorName = json.get("creatorName").getAsString();
+                    String groupName = json.get("groupName").getAsString();
+                    String description = json.has("description") ? json.get("description").getAsString() : "";
+                    boolean isPrivate = json.has("isPrivate") ? json.get("isPrivate").getAsBoolean() : false;
+
+                    boolean success = groupManager.createGroup(
+                        UUID.fromString(creatorUUID), creatorName, groupName, description, isPrivate
+                    );
+
+                    if (success) {
+                        Map<String, Object> response = Map.of(
+                            "success", true,
+                            "message", "Group created successfully"
+                        );
+                        sendJsonResponse(exchange, response, 200);
+                    } else {
+                        sendErrorResponse(exchange, "Failed to create group", 400);
+                    }
+
+                } catch (Exception e) {
+                    sendErrorResponse(exchange, "Internal server error", 500);
+                }
+            } else {
+                sendErrorResponse(exchange, "Method not allowed", 405);
+            }
+        }
+    }
+
+    private class JoinGroupHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            new CORSHandler().handle(exchange);
+
+            if ("POST".equals(exchange.getRequestMethod())) {
+                try {
+                    String requestBody = readRequestBody(exchange);
+                    JsonObject json = gson.fromJson(requestBody, JsonObject.class);
+
+                    String playerUUID = json.get("playerUUID").getAsString();
+                    String playerName = json.get("playerName").getAsString();
+                    String groupId = json.get("groupId").getAsString();
+
+                    boolean success = groupManager.joinGroup(
+                        UUID.fromString(groupId), UUID.fromString(playerUUID), playerName
+                    );
+
+                    if (success) {
+                        // Notify online group members
+                        Document group = groupManager.getGroup(UUID.fromString(groupId));
+                        if (group != null) {
+                            String groupName = group.getString("groupName");
+                            List<Document> members = group.getList("members", Document.class);
+                            for (Document member : members) {
+                                String memberName = member.getString("playerName");
+                                Player onlineMember = Bukkit.getPlayerExact(memberName);
+                                if (onlineMember != null && onlineMember.isOnline() && !memberName.equals(playerName)) {
+                                    onlineMember.sendMessage("§a" + playerName + " joined the group " + groupName + " (via web)");
+                                }
+                            }
+                        }
+
+                        Map<String, Object> response = Map.of("success", true, "message", "Joined group successfully");
+                        sendJsonResponse(exchange, response, 200);
+                    } else {
+                        sendErrorResponse(exchange, "Failed to join group", 400);
+                    }
+
+                } catch (Exception e) {
+                    sendErrorResponse(exchange, "Internal server error", 500);
+                }
+            } else {
+                sendErrorResponse(exchange, "Method not allowed", 405);
+            }
+        }
+    }
+
+    private class LeaveGroupHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            new CORSHandler().handle(exchange);
+
+            if ("POST".equals(exchange.getRequestMethod())) {
+                try {
+                    String requestBody = readRequestBody(exchange);
+                    JsonObject json = gson.fromJson(requestBody, JsonObject.class);
+
+                    String playerUUID = json.get("playerUUID").getAsString();
+                    String groupId = json.get("groupId").getAsString();
+
+                    boolean success = groupManager.leaveGroup(
+                        UUID.fromString(groupId), UUID.fromString(playerUUID)
+                    );
+
+                    Map<String, Object> response = Map.of("success", success);
+                    sendJsonResponse(exchange, response, success ? 200 : 400);
+
+                } catch (Exception e) {
+                    sendErrorResponse(exchange, "Internal server error", 500);
+                }
+            } else {
+                sendErrorResponse(exchange, "Method not allowed", 405);
+            }
+        }
+    }
+
+    private class FriendRequestsHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            new CORSHandler().handle(exchange);
+
+            if ("GET".equals(exchange.getRequestMethod())) {
+                try {
+                    String query = exchange.getRequestURI().getQuery();
+                    String playerUUID = getQueryParam(query, "playerUUID");
+
+                    if (playerUUID == null) {
+                        sendErrorResponse(exchange, "Player UUID required", 400);
+                        return;
+                    }
+
+                    List<Document> pendingRequests = friendManager.getPendingRequests(UUID.fromString(playerUUID));
+                    Map<String, Object> response = Map.of("requests", pendingRequests);
+                    sendJsonResponse(exchange, response, 200);
+
+                } catch (Exception e) {
+                    sendErrorResponse(exchange, "Internal server error", 500);
+                }
+            } else {
+                sendErrorResponse(exchange, "Method not allowed", 405);
+            }
+        }
+    }
+
     // Helper methods
     private String readRequestBody(HttpExchange exchange) throws IOException {
         InputStream inputStream = exchange.getRequestBody();
@@ -349,7 +713,18 @@ public class EmbeddedWebServer {
     }
 
     private UUID getPlayerUUID(String playerName) {
-        Player player = Bukkit.getPlayerExact(playerName);
-        return player != null ? player.getUniqueId() : UUID.nameUUIDFromBytes(("OfflinePlayer:" + playerName).getBytes());
+        UUID uuid = userDataManager.getPlayerUUIDByName(playerName);
+        return uuid != null ? uuid : UUID.nameUUIDFromBytes(("OfflinePlayer:" + playerName).getBytes());
+    }
+
+    private String getPlayerNameByUUID(UUID playerUUID) {
+        // Try to get from online players first
+        Player player = Bukkit.getPlayer(playerUUID);
+        if (player != null) {
+            return player.getName();
+        }
+        // search in db
+        String playerName = userDataManager.getPlayerNameByUUID(playerUUID);
+        return playerName != null ? playerName : "Unknown Player";
     }
 }

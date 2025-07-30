@@ -77,7 +77,7 @@ public class FriendManager {
             ).first();
 
             if (request == null) {
-                return false; // No pending request found
+                return false; // no pending request found
             }
 
             // Create friendship (bidirectional)
@@ -127,6 +127,11 @@ public class FriendManager {
             plugin.getLogger().warning("Failed to deny friend request: " + e.getMessage());
             return false;
         }
+    }
+
+
+    public boolean rejectFriendRequest(UUID targetUUID, UUID senderUUID) {
+        return denyFriendRequest(targetUUID, senderUUID);
     }
 
 

@@ -10,6 +10,7 @@ import me.harshit.minechat.database.FriendManager;
 import me.harshit.minechat.database.GroupManager;
 import me.harshit.minechat.database.UserDataManager;
 import me.harshit.minechat.listeners.ChatListener;
+import me.harshit.minechat.ranks.RankManager;
 import me.harshit.minechat.web.EmbeddedWebServer;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
@@ -22,6 +23,7 @@ public final class Minechat extends JavaPlugin {
     private UserDataManager userDataManager;
     private FriendManager friendManager;
     private GroupManager groupManager;
+    private RankManager rankManager;
     private FriendAPI friendAPI;
     private EmbeddedWebServer webServer;
     private ChatListener chatListener;
@@ -35,6 +37,9 @@ public final class Minechat extends JavaPlugin {
 
         // Save default config if it doesn't exist
         saveDefaultConfig();
+
+        // Initialize rank manager early (needs to be before other components)
+        rankManager = new RankManager(this);
 
         // Initialize db manager
         databaseManager = new DatabaseManager(this);
@@ -60,8 +65,8 @@ public final class Minechat extends JavaPlugin {
             getLogger().severe("Plugin will still work but messages won't be saved to database.");
         }
 
-        // Initialize chat listener
-        chatListener = new ChatListener(this, databaseManager);
+        // Initialize chat listener with rank manager
+        chatListener = new ChatListener(this, databaseManager, rankManager);
 
         // Initialize command handlers
         commandHandler = new ChatCommandHandler(this, databaseManager, userDataManager, friendManager);
@@ -76,6 +81,12 @@ public final class Minechat extends JavaPlugin {
 
         // Success message
         getLogger().info("✓ MineChat enabled successfully!");
+
+        // if not available log else dont spam the console
+        if (!rankManager.isRankSystemAvailable()) {
+            getLogger().warning("! No rank plugin detected - using default chat format");
+
+        }
 
         // Notify online players that the plugin is active
         getServer().broadcast(Component.text("MineChat is now active!")
@@ -143,5 +154,10 @@ public final class Minechat extends JavaPlugin {
     // this is used to manage user data like web access, etc.
     public UserDataManager getUserDataManager() {
         return userDataManager;
+    }
+
+    // gets the rank manager instance
+    public RankManager getRankManager() {
+        return rankManager;
     }
 }

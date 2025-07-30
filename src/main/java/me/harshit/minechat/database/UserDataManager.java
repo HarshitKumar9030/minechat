@@ -1,21 +1,25 @@
 package me.harshit.minechat.database;
 
+import me.harshit.minechat.Minechat;
 import org.bson.Document;
-import org.bukkit.plugin.java.JavaPlugin;
+import org.bukkit.Bukkit;
 import com.mongodb.client.MongoCollection;
 import com.mongodb.client.MongoDatabase;
+import org.bukkit.entity.Player;
 
 import java.security.MessageDigest;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 // manages user data related to web access and passwords
 public class UserDataManager {
 
     private final MongoCollection<Document> userCollection;
-    private final JavaPlugin plugin;
+    private final Minechat plugin;
 
-    public UserDataManager(MongoDatabase database, JavaPlugin plugin) {
+    public UserDataManager(MongoDatabase database, Minechat plugin) {
         this.userCollection = database.getCollection("user_data");
         this.plugin = plugin;
     }
@@ -122,7 +126,7 @@ public class UserDataManager {
             Document userDoc = userCollection.find(new Document("playerName", playerName)).first();
             return userDoc != null;
         } catch (Exception e) {
-            plugin.getLogger().warning("Failed to check if player exists " + playerName + ": " + e.getMessage());
+            plugin.getLogger().warning( "Failed to check if player exists " + playerName + ": " + e.getMessage());
             return false;
         }
     }
@@ -145,6 +149,125 @@ public class UserDataManager {
 
         } catch (Exception e) {
             plugin.getLogger().severe("Failed to hash password: " + e.getMessage());
+            return null;
+        }
+    }
+
+    // cache player data  when they join
+    public void cachePlayerRank(UUID playerUUID, String playerName, String cleanRank, String formattedRank) {
+        try {
+            Document rankData = new Document()
+                    .append("cleanRank", cleanRank)
+                    .append("formattedRank", formattedRank)
+                    .append("lastUpdated", System.currentTimeMillis());
+
+            userCollection.updateOne(
+                new Document("playerUUID", playerUUID.toString()),
+                new Document("$set", rankData),
+                new com.mongodb.client.model.UpdateOptions().upsert(true)
+            );
+        } catch (Exception e) {
+            plugin.getLogger().warning("Failed to cache rank data for " + playerName + ": " + e.getMessage());
+        }
+    }
+
+
+    private Document getCachedRankData(Document userDoc) {
+        String cleanRank = userDoc.getString("cleanRank");
+        String formattedRank = userDoc.getString("formattedRank");
+
+        // If no cached data exists, use default
+        if (cleanRank == null || formattedRank == null) {
+            return new Document()
+                    .append("cleanRank", "[CHAT]")
+                    .append("formattedRank", "§8[§7CHAT§8] ");
+        }
+
+        return new Document()
+                .append("cleanRank", cleanRank)
+                .append("formattedRank", formattedRank);
+    }
+
+    public List<Document> getAllRanks() {
+        try {
+            List<Document> users = new ArrayList<>();
+            for (Document userDoc : userCollection.find()) {
+                String playerName = userDoc.getString("playerName");
+                String playerUUID = userDoc.getString("playerUUID");
+                Player player = Bukkit.getPlayerExact(playerName);
+                
+                Document rankDoc = new Document()
+                        .append("playerName", playerName)
+                        .append("playerUUID", playerUUID);
+
+                if (player != null) {
+                    String cleanRank = plugin.getRankManager().getCleanRank(player);
+                    String coloredFormattedRank = plugin.getRankManager().getFormattedRank(player);
+
+                    cachePlayerRank(UUID.fromString(playerUUID), playerName, cleanRank, coloredFormattedRank);
+
+                    rankDoc.append("rank", cleanRank)
+                           .append("formattedRank", coloredFormattedRank)
+                           .append("online", true);
+                } else {
+                    Document cachedRank = getCachedRankData(userDoc);
+
+                    rankDoc.append("rank", cachedRank.getString("cleanRank"))
+                           .append("formattedRank", cachedRank.getString("formattedRank"))
+                           .append("online", false);
+                }
+
+                users.add(rankDoc);
+            }
+            return users;
+        } catch (Exception e) {
+            plugin.getLogger().warning("Failed to get all ranks: " + e.getMessage());
+            return new ArrayList<>();
+        }
+    }
+
+    
+    public Document getUserData(UUID playerUUID) {
+        try {
+            Document userDoc = userCollection.find(new Document("playerUUID", playerUUID.toString())).first();
+            if (userDoc != null) {
+                String playerName = userDoc.getString("playerName");
+                Player player = Bukkit.getPlayerExact(playerName);
+                
+                // Add rank information
+                if (player != null) {
+                    String cleanRank = plugin.getRankManager().getCleanRank(player);
+                    String coloredFormattedRank = plugin.getRankManager().getFormattedRank(player);
+
+                    cachePlayerRank(playerUUID, playerName, cleanRank, coloredFormattedRank);
+
+                    userDoc.append("rank", cleanRank)
+                           .append("formattedRank", coloredFormattedRank)
+                           .append("online", true);
+                } else {
+                    Document cachedRank = getCachedRankData(userDoc);
+                    userDoc.append("rank", cachedRank.getString("cleanRank"))
+                           .append("formattedRank", cachedRank.getString("formattedRank"))
+                           .append("online", false);
+                }
+            }
+            return userDoc;
+        } catch (Exception e) {
+            plugin.getLogger().warning("Failed to get user data for " + playerUUID + ": " + e.getMessage());
+            return new Document();
+        }
+    }
+
+
+    public String getPlayerNameByUUID(UUID playerUUID) {
+        try {
+            Document userDoc = userCollection.find(new Document("playerUUID", playerUUID.toString())).first();
+            if (userDoc != null) {
+                return userDoc.getString("playerName");
+            }
+            return null;
+        } catch (Exception e) {
+            plugin.getLogger().warning("Failed to get player name for UUID " + playerUUID + ": " + e.getMessage());
             return null;
         }
     }

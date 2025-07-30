@@ -271,4 +271,48 @@ public class GroupManager {
                 .append("role", "MEMBER")
                 .append("joinedDate", timestamp);
     }
+
+    // join group  directly, used by web interface
+
+    public boolean joinGroup(UUID groupId, UUID playerUUID, String playerName) {
+        try {
+            Document group = groupsCollection.find(new Document("groupId", groupId.toString())).first();
+            if (group == null) {
+                return false; // Group doesn't exist
+            }
+
+            // Check if player is already a member
+            List<Document> members = group.getList("members", Document.class);
+            boolean alreadyMember = members.stream()
+                    .anyMatch(member -> member.getString("playerUUID").equals(playerUUID.toString()));
+
+            if (alreadyMember) {
+                return false; // Already a member
+            }
+
+            // Check member limit
+            int maxMembers = group.getInteger("maxMembers", 25);
+            if (members.size() >= maxMembers) {
+                return false; // Group is full
+            }
+
+            // Add player to group
+            Document newMember = new Document()
+                    .append("playerUUID", playerUUID.toString())
+                    .append("playerName", playerName)
+                    .append("role", "member")
+                    .append("joinedDate", System.currentTimeMillis());
+
+            groupsCollection.updateOne(
+                new Document("groupId", groupId.toString()),
+                new Document("$push", new Document("members", newMember))
+            );
+
+            return true;
+
+        } catch (Exception e) {
+            plugin.getLogger().warning("Failed to join group: " + e.getMessage());
+            return false;
+        }
+    }
 }

@@ -9,66 +9,74 @@ mongodb:
 chat:
   # Enable/disable chat logging to database
   enable-logging: true
-  # Chat format (use {player} for player name, {message} for message)
-  format: "&7[&bChat&7] &f{player}&7: &f{message}"
-  # Maximum message length
+  # You may set your own chat format here
+  enable-custom-format: true
+  # Placeholders: {rank}, {player}, {displayname}, {message}
+  format: "{rank}{player}: {message}"
+  # Default rank for players without rank plugins (leave empty to disable)
+  default-rank: ""
+  # Max msg length
   max-message-length: 256
   # Enable chat filtering (basic profanity filter)
   enable-filter: true
-  # Words to filter (will be replaced with ***
-  # Todo: add more words to this list
-  filtered-words:
-    - "cunt"
-    - "fuck"
-    - "bitch"
-    - "nigga"
+
+  filter:
+    # Words to filter (will be replaced with replacement string)
+    banned-words:
+      - "cunt"
+      - "fuck"
+      - "bitch"
+      - "nigga"
+      - "asshole"
+      - "dick"
+    replacement: "***"
+
+ranks:
+  enable: true
+  # Prefer specific plugin over Vault (if multiple are available)
+  # Options: "auto", "vault", "luckperms", "powerranks"
+  preferred-system: "auto"
+  # Fallback format if no rank is found
+  fallback-format: "[PLAYER]"
+  debug: false
 
 web:
   # Enable web API endpoints
   enable-api: true
-  # Port for web interface (you'll use this later)
+  # web api port(you'll need this later)
   port: 8080
   # Enable CORS for web requests
   enable-cors: true
   # Require password authentication for web access
   require-authentication: true
   # Default web access (users can change this with /minechat setpassword)
+  # This means that once a new player joins, they will have to set a password for the web access
+  # By default, this is disabled
   default-password-enabled: false
-
   interface-url: "http://localhost:3000"
 
 private-messages:
   # Enable private messaging feature
   enable: true
   # Command aliases for private messaging
-  aliases: ["msg", "pm", "tell", "whisper"]
+  aliases: ["msg", "pm", "tell", "whisper", "reply", "r"]
   # Format for private messages
   format: "&7[&dPM&7] &e{sender} &7→ &e{receiver}&7: &f{message}"
-  # Console logging format for private messages
-  console-format: "[PM] {sender} -> {receiver}: {message}"
 
 friends:
   # Enable friend system
   enable: true
-  # Maximum number of friends per player
+  # Maximum friends per player
   max-friends: 50
-  # Friend request expiration time (in hours)
-  request-expiration: 24
-  # Show online status to friends
-  show-online-status: true
-  # Notify when friends join/leave
-  join-leave-notifications: true
+  # Enable friend notifications
+  notifications: true
 
 chat-groups:
-  # Enable chat groups feature
+  # Enable group chat system
   enable: true
-  # Maximum number of groups a player can be in
+  # Maximum groups per player
   max-groups-per-player: 10
   # Maximum members per group
   max-members-per-group: 25
-  # Allow players to opt out of all group invitations
-  allow-opt-out: true
-  # Group chat format
+  # Format for group messages
   format: "&7[&aGroup: &b{group}&7] &f{player}&7: &f{message}"
-  # Auto-delete inactive groups (days)
-  auto-delete-inactive: 30
