@@ -56,9 +56,9 @@ public class ChatCommandHandler implements CommandExecutor, TabCompleter {
     private boolean handleMineChatCommand(CommandSender sender, String[] args) {
         if (args.length == 0) {
             sender.sendMessage(Component.text(""));
-            sender.sendMessage(Component.text("══════════════════════════════").color(NamedTextColor.GOLD));
+            sender.sendMessage(Component.text("══════════════════").color(NamedTextColor.GOLD));
             sender.sendMessage(Component.text("        MineChat Help        ").color(NamedTextColor.GOLD).decorate(TextDecoration.BOLD));
-            sender.sendMessage(Component.text("══════════════════════════════").color(NamedTextColor.GOLD));
+            sender.sendMessage(Component.text("══════════════════").color(NamedTextColor.GOLD));
             sender.sendMessage(Component.text(""));
 
             sender.sendMessage(Component.text("🌐 Web Access Commands:").color(NamedTextColor.AQUA).decorate(TextDecoration.BOLD));
@@ -85,7 +85,7 @@ public class ChatCommandHandler implements CommandExecutor, TabCompleter {
             sender.sendMessage(Component.text(""));
 
             // Group Commands
-            sender.sendMessage(Component.text("👪 Group System:").color(NamedTextColor.LIGHT_PURPLE).decorate(TextDecoration.BOLD));
+            sender.sendMessage(Component.text("👪 Group System:").color(NamedTextColor.LIGHT_PURPLE).decorate(TextDecoration.BOLD)); // yeah the emoji means a group 🫡
             sender.sendMessage(Component.text("  • /group - Show group commands").color(NamedTextColor.GREEN));
             sender.sendMessage(Component.text("    Complete group chat system").color(NamedTextColor.GRAY));
             sender.sendMessage(Component.text(""));
@@ -102,17 +102,17 @@ public class ChatCommandHandler implements CommandExecutor, TabCompleter {
 
             // Admin Commands
             if (sender.hasPermission("minechat.admin")) {
-                sender.sendMessage(Component.text("⚙️ Admin Commands:").color(NamedTextColor.RED).decorate(TextDecoration.BOLD));
+                sender.sendMessage(Component.text("⚙ Admin Commands:").color(NamedTextColor.RED).decorate(TextDecoration.BOLD));
                 sender.sendMessage(Component.text("  • /minechat reload").color(NamedTextColor.GREEN));
                 sender.sendMessage(Component.text("    Reload plugin configuration").color(NamedTextColor.GRAY));
                 sender.sendMessage(Component.text(""));
             }
 
             // Footer
-            sender.sendMessage(Component.text("══════════════════════════════").color(NamedTextColor.GOLD));
+            sender.sendMessage(Component.text("═════════════════════════════").color(NamedTextColor.GOLD));
             sender.sendMessage(Component.text("💡 Tip: Use /minechat status to check web access").color(NamedTextColor.AQUA));
             sender.sendMessage(Component.text("🌐 Aliases: /mc, /mchat").color(NamedTextColor.AQUA));
-            sender.sendMessage(Component.text("══════════════════════════════").color(NamedTextColor.GOLD));
+            sender.sendMessage(Component.text("═════════════════════════════").color(NamedTextColor.GOLD));
             sender.sendMessage(Component.text(""));
 
             return true;

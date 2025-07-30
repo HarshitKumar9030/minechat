@@ -98,9 +98,9 @@ public class GroupCommandHandler implements CommandExecutor, TabCompleter {
     private void showGroupHelp(Player player) {
         // Show comprehensive group help with better formatting
         player.sendMessage(Component.text(""));
-        player.sendMessage(Component.text("══════════════════════════════").color(NamedTextColor.GOLD));
+        player.sendMessage(Component.text("═══════════════════").color(NamedTextColor.GOLD));
         player.sendMessage(Component.text("         Group System         ").color(NamedTextColor.GOLD).decorate(TextDecoration.BOLD));
-        player.sendMessage(Component.text("══════════════════════════════").color(NamedTextColor.GOLD));
+        player.sendMessage(Component.text("═══════════════════").color(NamedTextColor.GOLD));
         player.sendMessage(Component.text(""));
 
         player.sendMessage(Component.text("👪 Group Management:").color(NamedTextColor.LIGHT_PURPLE).decorate(TextDecoration.BOLD)); // the emoji ded
@@ -138,7 +138,7 @@ public class GroupCommandHandler implements CommandExecutor, TabCompleter {
         player.sendMessage(Component.text("    View detailed group information").color(NamedTextColor.GRAY));
         player.sendMessage(Component.text(""));
 
-        player.sendMessage(Component.text("══════════════════════════════").color(NamedTextColor.GOLD));
+        player.sendMessage(Component.text("═════════════════════").color(NamedTextColor.GOLD));
         player.sendMessage(Component.text(""));
     }
 

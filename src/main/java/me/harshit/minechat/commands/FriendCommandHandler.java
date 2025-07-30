@@ -90,9 +90,9 @@ public class FriendCommandHandler implements CommandExecutor, TabCompleter {
 
     private void showFriendHelp(Player player) {
         player.sendMessage(Component.text(""));
-        player.sendMessage(Component.text("════════════════════════").color(NamedTextColor.GOLD));
+        player.sendMessage(Component.text("══════════════════").color(NamedTextColor.GOLD));
         player.sendMessage(Component.text("        Friend System        ").color(NamedTextColor.GOLD).decorate(TextDecoration.BOLD));
-        player.sendMessage(Component.text("════════════════════════").color(NamedTextColor.GOLD));
+        player.sendMessage(Component.text("══════════════════").color(NamedTextColor.GOLD));
         player.sendMessage(Component.text(""));
 
         player.sendMessage(Component.text("👥 Friend Management:").color(NamedTextColor.YELLOW).decorate(TextDecoration.BOLD));
@@ -121,7 +121,7 @@ public class FriendCommandHandler implements CommandExecutor, TabCompleter {
         player.sendMessage(Component.text("    View pending friend requests").color(NamedTextColor.GRAY));
         player.sendMessage(Component.text(""));
 
-        player.sendMessage(Component.text("════════════════════════").color(NamedTextColor.GOLD));
+        player.sendMessage(Component.text("══════════════════").color(NamedTextColor.GOLD));
         player.sendMessage(Component.text(""));
     }
 
