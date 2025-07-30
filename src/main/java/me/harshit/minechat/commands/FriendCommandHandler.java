@@ -5,6 +5,7 @@ import me.harshit.minechat.database.FriendManager;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.event.ClickEvent;
 import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.text.format.TextDecoration;
 import org.bson.Document;
 import org.bukkit.Bukkit;
 import org.bukkit.command.Command;
@@ -84,14 +85,13 @@ public class FriendCommandHandler implements CommandExecutor, TabCompleter {
 
 
     private void showFriendHelp(Player player) {
-        // Show comprehensive friend help with better formatting
         player.sendMessage(Component.text(""));
-        player.sendMessage(Component.text("════════════════════════════════════════").color(NamedTextColor.GOLD));
-        player.sendMessage(Component.text("               Friend System               ").color(NamedTextColor.GOLD).bold());
-        player.sendMessage(Component.text("════════════════════════════════════════").color(NamedTextColor.GOLD));
+        player.sendMessage(Component.text("══════════════════════════════").color(NamedTextColor.GOLD));
+        player.sendMessage(Component.text("        Friend System        ").color(NamedTextColor.GOLD).decorate(TextDecoration.BOLD));
+        player.sendMessage(Component.text("══════════════════════════════").color(NamedTextColor.GOLD));
         player.sendMessage(Component.text(""));
 
-        player.sendMessage(Component.text("👥 Friend Management:").color(NamedTextColor.YELLOW).bold());
+        player.sendMessage(Component.text("👥 Friend Management:").color(NamedTextColor.YELLOW).decorate(TextDecoration.BOLD));
         player.sendMessage(Component.text("  • /friend add <player>").color(NamedTextColor.GREEN));
         player.sendMessage(Component.text("    Send a friend request to a player").color(NamedTextColor.GRAY));
         player.sendMessage(Component.text(""));
@@ -108,20 +108,16 @@ public class FriendCommandHandler implements CommandExecutor, TabCompleter {
         player.sendMessage(Component.text("    Remove a friend from your list").color(NamedTextColor.GRAY));
         player.sendMessage(Component.text(""));
 
-        player.sendMessage(Component.text("📋 Information Commands:").color(NamedTextColor.BLUE).bold());
+        player.sendMessage(Component.text("📋 Information Commands:").color(NamedTextColor.LIGHT_PURPLE).decorate(TextDecoration.BOLD));
         player.sendMessage(Component.text("  • /friend list").color(NamedTextColor.GREEN));
-        player.sendMessage(Component.text("    View your current friends list").color(NamedTextColor.GRAY));
+        player.sendMessage(Component.text("    View your friends list").color(NamedTextColor.GRAY));
         player.sendMessage(Component.text(""));
 
         player.sendMessage(Component.text("  • /friend requests").color(NamedTextColor.GREEN));
         player.sendMessage(Component.text("    View pending friend requests").color(NamedTextColor.GRAY));
         player.sendMessage(Component.text(""));
 
-        // Footer
-        player.sendMessage(Component.text("════════════════════════════════════════").color(NamedTextColor.GOLD));
-        player.sendMessage(Component.text("💡 Tip: Click [Accept] or [Deny] buttons in requests").color(NamedTextColor.AQUA));
-        player.sendMessage(Component.text("🎯 Aliases: /friends, /f").color(NamedTextColor.AQUA));
-        player.sendMessage(Component.text("════════════════════════════════════════").color(NamedTextColor.GOLD));
+        player.sendMessage(Component.text("══════════════════════════════").color(NamedTextColor.GOLD));
         player.sendMessage(Component.text(""));
     }
 

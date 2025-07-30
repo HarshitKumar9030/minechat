@@ -2,7 +2,7 @@ name: minechat
 version: '1.0-SNAPSHOT'
 main: me.harshit.minechat.Minechat
 api-version: '1.20'
-description: Chat Plugin for minecraft
+description:  Chat plugin with MongoDB integration, web interface, friend system, and chat groups
 author: Harshit
 
 commands:
@@ -24,6 +24,18 @@ commands:
     description: Send a private message to a player
     usage: /whisper <player> <message>
     aliases: [w]
+  reply:
+    description: Reply to the last private message received
+    usage: /reply <message>
+    aliases: [r]
+  friend:
+    description: Friend system commands
+    usage: /friend <add|accept|deny|remove|list|requests>
+    aliases: [friends, f]
+  group:
+    description: Chat groups commands
+    usage: /group <create|invite|accept|deny|leave|list|chat|info>
+    aliases: [groups, g]
 
 permissions:
   minechat.admin:
@@ -38,3 +50,21 @@ permissions:
   minechat.pm:
     description: Permission to send private messages
     default: true
+  minechat.friends:
+    description: Permission to use friend system
+    default: true
+  minechat.friends.add:
+    description: Permission to send friend requests
+    default: true
+  minechat.friends.unlimited:
+    description: Bypass friend limits (for VIP players)
+    default: op
+  minechat.groups:
+    description: Permission to use group system
+    default: true
+  minechat.groups.create:
+    description: Permission to create groups
+    default: true
+  minechat.groups.unlimited:
+    description: Bypass group limits (for VIP players)
+    default: op
