@@ -3,6 +3,7 @@ import { Inter } from "next/font/google";
 import localFont from "next/font/local";
 import "./globals.css";
 import { SERVER_DESCRIPTION, SERVER_NAME } from '@/lib/constants'
+import NavBar from "@/components/NavBar";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -49,6 +50,7 @@ export default function RootLayout({
       <body
         className={`${inter.variable} ${minecrafter.variable} ${minecraftia.variable} ${inter.className} antialiased bg-background`}
       >
+        <NavBar />
         {children}
       </body>
     </html>
