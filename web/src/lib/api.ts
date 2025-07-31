@@ -231,15 +231,39 @@ export const getRankColor = (formattedRank: string): string => {
     '§9': 'text-neutral-300',
     '§a': 'text-neutral-200',
     '§b': 'text-neutral-300',
-    '§c': 'text-yellow-600', 
+    '§c': 'text-red-400', 
     '§d': 'text-yellow-400',
     '§e': 'text-yellow-300',
     '§f': 'text-white',
   };
 
-  const colorMatch = formattedRank.match(/§[0-9a-f]/i);
-  if (colorMatch) {
-    return colorMap[colorMatch[0]] || 'text-neutral-400';
+  const colorMatches = formattedRank.match(/§[0-9a-f]/gi);
+  if (colorMatches && colorMatches.length > 0) {
+    const priorityColors = ['§c', '§6', '§e', '§d', '§a', '§b', '§9', '§5', '§f'];
+    
+    for (const priority of priorityColors) {
+        // this works as it checks if the color code exists in the matches
+        // find the first color code that matches the priority
+        // this will return the first match that is found in the colorMatches array
+      const found = colorMatches.find(code => code.toLowerCase() === priority);
+      if (found && colorMap[found.toLowerCase()]) {
+        return colorMap[found.toLowerCase()];
+      }
+    }
+    
+    const firstColor = colorMatches[0].toLowerCase();
+    if (colorMap[firstColor]) {
+      return colorMap[firstColor];
+    }
+  }
+  
+  const lowerRank = formattedRank.toLowerCase();
+  if (lowerRank.includes('admin') || lowerRank.includes('owner')) {
+    return 'text-red-400';
+  } else if (lowerRank.includes('mod') || lowerRank.includes('staff')) {
+    return 'text-purple-400';
+  } else if (lowerRank.includes('vip') || lowerRank.includes('mvp')) {
+    return 'text-yellow-500';
   }
   
   return 'text-neutral-400';
