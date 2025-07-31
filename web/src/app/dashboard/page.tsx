@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { MoveRight, MoveLeft,  } from 'lucide-react';
 import { SERVER_NAME } from '@/lib/constants';
 import Image from 'next/image';
+import { useRouter } from 'next/navigation';
 
 export interface NavigationCard {
     id: string;
@@ -45,6 +46,7 @@ const navigationCards = [
 
 const DashboardPage = () => {
   const [currentIndex, setCurrentIndex] = useState(0);
+  const router = useRouter();
 
   const nextSlide = () => {
     setCurrentIndex((prev) => (prev + 1) % navigationCards.length);
@@ -52,6 +54,10 @@ const DashboardPage = () => {
 
   const prevSlide = () => {
     setCurrentIndex((prev) => (prev - 1 + navigationCards.length) % navigationCards.length);
+  };
+
+  const handleCardClick = (href: string) => {
+    router.push(href);
   };
 
   return (
@@ -92,7 +98,7 @@ const DashboardPage = () => {
                 >
                   <div
                     className="h-80 rounded-xl bg-neutral-800 border border-neutral-700 hover:border-neutral-600 cursor-pointer transition-all duration-300 hover:scale-105 flex flex-col items-center justify-center p-8 text-center group overflow-hidden"
-                    onClick={() => window.location.href = card.href}
+                    onClick={() => handleCardClick(card.href)}
                   >
                     <Image src={image} alt={card.title} width={600} height={600} className="h-16 w-16 text-yellow-500 mb-6 group-hover:scale-110 transition-transform duration-300" />
 
@@ -134,7 +140,7 @@ const DashboardPage = () => {
                 >
                   <div
                     className="h-48 rounded-xl bg-neutral-800 border border-neutral-700 hover:border-neutral-600 cursor-pointer transition-all duration-300 hover:scale-105 flex flex-col items-center justify-center p-4 text-center group"
-                    onClick={() => window.location.href = card.href}
+                    onClick={() => handleCardClick(card.href)}
                   >
                     <Image src={image} alt={card.title} width={600} height={600} className="h-12 w-12 text-yellow-500 mb-4 group-hover:scale-110 transition-transform duration-300" />
                     <h3 className="text-base font-minecraftia text-neutral-200 mb-1 leading-none">

@@ -7,12 +7,14 @@ import { Copy, ExternalLink, Check, LogIn, User } from "lucide-react";
 import PlayerMarquee from "@/components/PlayerMarquee";
 import LoginModal from "@/modals/LoginModal";
 import { useState, useEffect } from "react";
+import { useRouter } from 'next/navigation';
 
 export default function Home() {
   const [copiedStates, setCopiedStates] = useState<{ [key: string]: boolean }>({});
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [user, setUser] = useState<{ username: string } | null>(null);
+  const router = useRouter();
 
   useEffect(() => {
     const savedUser = localStorage.getItem('minechat_user');
@@ -57,8 +59,7 @@ export default function Home() {
 
   const handleLoginButtonClick = () => {
     if (isLoggedIn) {
-      // Navigate to chat or dashboard
-      window.location.href = '/dashboard';
+      router.push('/dashboard');
     } else {
       setShowLoginModal(true);
     }
