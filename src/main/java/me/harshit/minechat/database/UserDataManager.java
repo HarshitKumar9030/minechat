@@ -271,4 +271,45 @@ public class UserDataManager {
             return null;
         }
     }
+
+    public List<Document> getAllPlayers() {
+        try {
+            List<Document> players = new ArrayList<>();
+            for (Document userDoc : userCollection.find()) {
+                String playerName = userDoc.getString("playerName");
+                String playerUUID = userDoc.getString("playerUUID");
+                Player player = Bukkit.getPlayerExact(playerName);
+
+                Document playerDoc = new Document()
+                        .append("playerName", playerName)
+                        .append("playerUUID", playerUUID)
+                        .append("webAccessEnabled", userDoc.getBoolean("webAccessEnabled", false))
+                        .append("lastUpdated", userDoc.getLong("lastUpdated"));
+
+                if (player != null && player.isOnline()) {
+                    String cleanRank = plugin.getRankManager().getCleanRank(player);
+                    String coloredFormattedRank = plugin.getRankManager().getFormattedRank(player);
+
+                    // cache the current rank data
+                    cachePlayerRank(UUID.fromString(playerUUID), playerName, cleanRank, coloredFormattedRank);
+
+                    playerDoc.append("rank", cleanRank)
+                           .append("formattedRank", coloredFormattedRank)
+                           .append("lastSeen", System.currentTimeMillis());
+                } else {
+                    // use cached rank data for offline players
+                    Document cachedRank = getCachedRankData(userDoc);
+                    playerDoc.append("rank", cachedRank.getString("cleanRank"))
+                           .append("formattedRank", cachedRank.getString("formattedRank"))
+                           .append("lastSeen", userDoc.getLong("lastSeen"));
+                }
+
+                players.add(playerDoc);
+            }
+            return players;
+        } catch (Exception e) {
+            plugin.getLogger().warning("Failed to get all players: " + e.getMessage());
+            return new ArrayList<>();
+        }
+    }
 }
