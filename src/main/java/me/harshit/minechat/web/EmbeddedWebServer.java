@@ -846,15 +846,17 @@ public class EmbeddedWebServer {
                     String requestBody = readRequestBody(exchange);
                     JsonObject json = gson.fromJson(requestBody, JsonObject.class);
 
-                    String playerUUID = json.get("playerUUID").getAsString();
-                    String requestId = json.get("requestId").getAsString();
+                    String senderUUID = json.get("senderUUID").getAsString();
+                    String targetUUID = json.get("targetUUID").getAsString();
 
-                    boolean success = friendManager.cancelFriendRequest(UUID.fromString(playerUUID), UUID.fromString(requestId));
+                    boolean success = friendManager.cancelFriendRequest(UUID.fromString(senderUUID), UUID.fromString(targetUUID));
 
                     Map<String, Object> response = Map.of("success", success);
                     sendJsonResponse(exchange, response, success ? 200 : 400);
 
                 } catch (Exception e) {
+                    plugin.getLogger().warning("Failed to cancel friend request: " + e.getMessage());
+                    e.printStackTrace();
                     sendErrorResponse(exchange, "Internal server error", 500);
                 }
             } else {
