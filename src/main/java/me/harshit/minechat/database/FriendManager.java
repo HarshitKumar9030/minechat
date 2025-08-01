@@ -205,17 +205,25 @@ public class FriendManager {
         try {
             List<Document> requests = new ArrayList<>();
 
-            // Get incoming requests (requests sent TO this player)
+            // get incoming requests (requests sent TO this player)
+            List<Document> incomingRequests = new ArrayList<>();
             friendRequestsCollection.find(
                 new Document("targetUUID", playerUUID.toString())
                     .append("status", "pending")
-            ).into(requests);
+            ).into(incomingRequests);
+
+            // for incoming requests, already have all the info needed
+            requests.addAll(incomingRequests);
 
             // Get outgoing requests (requests sent BY this player)
+            List<Document> outgoingRequests = new ArrayList<>();
             friendRequestsCollection.find(
                 new Document("senderUUID", playerUUID.toString())
                     .append("status", "pending")
-            ).into(requests);
+            ).into(outgoingRequests);
+
+            // the documents should already contain targetUUID and targetName from sendFriendRequest
+            requests.addAll(outgoingRequests);
 
             return requests;
         } catch (Exception e) {

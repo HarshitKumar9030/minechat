@@ -68,7 +68,6 @@ public class EmbeddedWebServer {
             server.createContext("/api/leave-group", new LeaveGroupHandler());
             server.createContext("/api/ranks", new RanksHandler());
             server.createContext("/api/users", new UsersHandler());
-            server.createContext("/api/players", new PlayersHandler());
             server.createContext("/api/friend-requests", new FriendRequestsHandler());
 
             // nothing just a test endpoint
@@ -376,48 +375,6 @@ public class EmbeddedWebServer {
 
                     Document user = userDataManager.getUserData(UUID.fromString(playerUUID));
                     Map<String, Object> response = Map.of("user", user);
-                    sendJsonResponse(exchange, response, 200);
-
-                } catch (Exception e) {
-                    sendErrorResponse(exchange, "Internal server error", 500);
-                }
-            } else {
-                sendErrorResponse(exchange, "Method not allowed", 405);
-            }
-        }
-    }
-
-    private class PlayersHandler implements HttpHandler {
-        @Override
-        public void handle(HttpExchange exchange) throws IOException {
-            new CORSHandler().handle(exchange);
-
-            if ("GET".equals(exchange.getRequestMethod())) {
-                try {
-                    // Get all players from database and online players
-                    List<Document> allPlayers = userDataManager.getAllPlayers();
-
-                    // Add online status and additional info
-                    allPlayers.forEach(playerDoc -> {
-                        String playerName = playerDoc.getString("playerName");
-                        Player onlinePlayer = Bukkit.getPlayerExact(playerName);
-                        boolean isOnline = onlinePlayer != null && onlinePlayer.isOnline();
-
-                        playerDoc.append("online", isOnline);
-                        if (isOnline) {
-                            String rank = plugin.getRankManager().getPlayerRank(onlinePlayer);
-                            String formattedRank = plugin.getRankManager().getFormattedRank(onlinePlayer);
-                            playerDoc.append("currentRank", rank);
-                            playerDoc.append("formattedRank", formattedRank);
-                            playerDoc.append("lastSeen", System.currentTimeMillis());
-                        }
-                    });
-
-                    Map<String, Object> response = Map.of(
-                        "players", allPlayers,
-                        "totalPlayers", allPlayers.size(),
-                        "onlinePlayers", Bukkit.getOnlinePlayers().size()
-                    );
                     sendJsonResponse(exchange, response, 200);
 
                 } catch (Exception e) {

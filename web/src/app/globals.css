@@ -11,6 +11,7 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-inter);
   --font-minecraft: var(--font-minecrafter);
+  --font-inter: var(--font-inter);
   --font-minecraftia: var(--font-minecraftia);
   --color-primary: var(--primary);
   --color-accent: var(--accent);

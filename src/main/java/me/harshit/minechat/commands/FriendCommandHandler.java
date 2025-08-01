@@ -206,22 +206,27 @@ public class FriendCommandHandler implements CommandExecutor, TabCompleter {
         }
 
         String senderName = args[1];
-        Player sender = Bukkit.getPlayerExact(senderName);
-
-        if (sender == null) {
-            player.sendMessage(Component.text("Player '" + senderName + "' not found!").color(NamedTextColor.RED));
-            return true;
-        }
 
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
-            boolean success = friendManager.acceptFriendRequest(player.getUniqueId(), sender.getUniqueId());
+            UUID senderUUID = userDataManager.getPlayerUUID(senderName);
+
+            if (senderUUID == null) {
+                Bukkit.getScheduler().runTask(plugin, () -> {
+                    player.sendMessage(Component.text("Player '" + senderName + "' not found!").color(NamedTextColor.RED));
+                });
+                return;
+            }
+
+            boolean success = friendManager.acceptFriendRequest(player.getUniqueId(), senderUUID);
 
             Bukkit.getScheduler().runTask(plugin, () -> {
                 if (success) {
-                    player.sendMessage(Component.text("✓ You're now friends with " + sender.getName() + "!").color(NamedTextColor.GREEN));
+                    player.sendMessage(Component.text("✓ You're now friends with " + senderName + "!").color(NamedTextColor.GREEN));
 
-                    if (sender.isOnline()) {
-                        sender.sendMessage(Component.text("✓ " + player.getName() + " accepted your friend request!").color(NamedTextColor.GREEN));
+                    // notify sender if they're online
+                    Player onlineSender = Bukkit.getPlayerExact(senderName);
+                    if (onlineSender != null && onlineSender.isOnline()) {
+                        onlineSender.sendMessage(Component.text("✓ " + player.getName() + " accepted your friend request!").color(NamedTextColor.GREEN));
                     }
                 } else {
                     player.sendMessage(Component.text("No pending friend request from " + senderName + ".").color(NamedTextColor.RED));
@@ -240,15 +245,18 @@ public class FriendCommandHandler implements CommandExecutor, TabCompleter {
         }
 
         String senderName = args[1];
-        Player sender = Bukkit.getPlayerExact(senderName);
-
-        if (sender == null) {
-            player.sendMessage(Component.text("Player '" + senderName + "' not found!").color(NamedTextColor.RED));
-            return true;
-        }
 
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
-            boolean success = friendManager.denyFriendRequest(player.getUniqueId(), sender.getUniqueId());
+            UUID senderUUID = userDataManager.getPlayerUUID(senderName);
+
+            if (senderUUID == null) {
+                Bukkit.getScheduler().runTask(plugin, () -> {
+                    player.sendMessage(Component.text("Player '" + senderName + "' not found!").color(NamedTextColor.RED));
+                });
+                return;
+            }
+
+            boolean success = friendManager.denyFriendRequest(player.getUniqueId(), senderUUID);
 
             Bukkit.getScheduler().runTask(plugin, () -> {
                 if (success) {

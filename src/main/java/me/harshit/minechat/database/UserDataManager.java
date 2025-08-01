@@ -120,13 +120,26 @@ public class UserDataManager {
         }
     }
 
-    // returns true if player has joined even once means they exist in the db
+
+    public UUID getPlayerUUID(String playerName) {
+        try {
+            Document userDoc = userCollection.find(new Document("playerName", playerName)).first();
+            if (userDoc != null) {
+                return UUID.fromString(userDoc.getString("playerUUID"));
+            }
+            return null;
+        } catch (Exception e) {
+            plugin.getLogger().warning("Error getting player UUID for " + playerName + ": " + e.getMessage());
+            return null;
+        }
+    }
+
     public boolean playerExists(String playerName) {
         try {
             Document userDoc = userCollection.find(new Document("playerName", playerName)).first();
             return userDoc != null;
         } catch (Exception e) {
-            plugin.getLogger().warning( "Failed to check if player exists " + playerName + ": " + e.getMessage());
+            plugin.getLogger().warning("Error checking if player exists " + playerName + ": " + e.getMessage());
             return false;
         }
     }

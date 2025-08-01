@@ -31,6 +31,15 @@ export interface FriendInfo {
   online: boolean;
 }
 
+export interface FriendRequest {
+  senderUUID: string;
+  senderName: string;
+  targetUUID?: string;    // for outgoing requests - who you sent the request to
+  targetName?: string;    // for outgoing requests - name of the person you sent request to
+  timestamp: number;
+  status: string;
+}
+
 export interface GroupInfo {
   groupId: string;
   groupName: string;
@@ -60,6 +69,15 @@ export class MinechatAPI {
     try {
       const response = await fetch(url, config);
       const data = await response.json();
+      
+      // Check if the response status indicates an error
+      if (!response.ok) {
+        // Create an error object that includes the response data
+        const error = new Error(data.error || `HTTP ${response.status}: ${response.statusText}`);
+        (error as any).response = { data, status: response.status };
+        throw error;
+      }
+      
       return data;
     } catch (error) {
       console.error('API request failed:', error);
@@ -123,6 +141,10 @@ export class MinechatAPI {
 
   async getFriends(playerUUID: string): Promise<{ friends: FriendInfo[] }> {
     return this.request<{ friends: FriendInfo[] }>(`/friends?playerUUID=${playerUUID}`);
+  }
+
+  async getFriendRequests(playerUUID: string): Promise<{ requests: FriendRequest[] }> {
+    return this.request<{ requests: FriendRequest[] }>(`/friend-requests?playerUUID=${playerUUID}`);
   }
 
   async sendFriendRequest(senderUUID: string, senderName: string, targetName: string) {
