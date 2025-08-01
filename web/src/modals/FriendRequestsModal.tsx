@@ -11,6 +11,7 @@ interface FriendRequestsModalProps {
   sentRequests: FriendRequest[];
   onAccept: (uuid: string) => Promise<void>;
   onReject: (uuid: string) => Promise<void>;
+  onCancel: (uuid: string) => Promise<void>;
   actionLoading: string | null;
 }
 
@@ -21,6 +22,7 @@ const FriendRequestsModal: React.FC<FriendRequestsModalProps> = ({
   sentRequests, 
   onAccept, 
   onReject, 
+  onCancel,
   actionLoading
 }) => {
   const [activeTab, setActiveTab] = useState<'incoming' | 'sent'>('incoming');
@@ -162,9 +164,18 @@ const FriendRequestsModal: React.FC<FriendRequestsModalProps> = ({
                         </button>
                       </div>
                     ) : (
-                      <div className="text-neutral-500 font-minecraftia text-xs">
-                        Pending...
-                      </div>
+                      <button
+                        onClick={() => request.targetUUID && onCancel(request.targetUUID)}
+                        disabled={actionLoading === request.targetUUID}
+                        className="p-2 rounded-lg bg-red-900/30 border border-red-800/50 hover:bg-red-900/50 transition-all duration-300 disabled:opacity-50 hover:scale-110 disabled:hover:scale-100"
+                        aria-label="Cancel Request"
+                      >
+                        {actionLoading === request.targetUUID ? (
+                          <div className="h-4 w-4 border border-red-400 border-t-transparent rounded-full animate-spin" />
+                        ) : (
+                          <X className="h-4 w-4 text-red-400" />
+                        )}
+                      </button>
                     )}
                   </div>
                 );

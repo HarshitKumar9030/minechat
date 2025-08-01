@@ -175,6 +175,13 @@ export class MinechatAPI {
     });
   }
 
+  async cancelFriendRequest(senderUUID: string, targetUUID: string) {
+    return this.request('/cancel-friend-request', {
+      method: 'POST',
+      body: JSON.stringify({ senderUUID, targetUUID }),
+    });
+  }
+
   async getUserGroups(playerUUID: string): Promise<{ groups: GroupInfo[] }> {
     return this.request<{ groups: GroupInfo[] }>(`/groups?playerUUID=${playerUUID}`);
   }

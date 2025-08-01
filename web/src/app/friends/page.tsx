@@ -76,6 +76,26 @@ const FriendsPage = () => {
   const handleSendFriendRequest = async (friendName: string): Promise<{success: boolean; error?: string}> => {
     if (!user) return { success: false, error: 'User not authenticated' };
 
+    if (friendName.toLowerCase() === user.playerName.toLowerCase()) {
+      return { success: false, error: "You cannot send a friend request to yourself!" };
+    }
+
+    const isAlreadyFriend = friends.some(friend => 
+      friend.friendName.toLowerCase() === friendName.toLowerCase()
+    );
+    if (isAlreadyFriend) {
+      return { success: false, error: `${friendName} is already your friend!` };
+    }
+
+    const hasPendingRequest = friendRequests.some(request => 
+      request.senderName.toLowerCase() === friendName.toLowerCase()
+    ) || sentRequests.some(request => 
+      request.targetName?.toLowerCase() === friendName.toLowerCase()
+    );
+    if (hasPendingRequest) {
+      return { success: false, error: `You already have a pending friend request with ${friendName}!` };
+    }
+
     setActionLoading('send');
     try {
       await api.sendFriendRequest(user.playerUUID, user.playerName, friendName);
@@ -122,6 +142,20 @@ const FriendsPage = () => {
       await loadFriendsData(); // Reload data
     } catch (error) {
       console.error('Failed to reject friend request:', error);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleCancelRequest = async (targetUUID: string) => {
+    if (!user) return;
+    
+    setActionLoading(targetUUID);
+    try {
+      await api.cancelFriendRequest(user.playerUUID, targetUUID);
+      await loadFriendsData(); // Reload data
+    } catch (error) {
+      console.error('Failed to cancel friend request:', error);
     } finally {
       setActionLoading(null);
     }
@@ -355,6 +389,7 @@ const FriendsPage = () => {
         sentRequests={sentRequests}
         onAccept={handleAcceptRequest}
         onReject={handleRejectRequest}
+        onCancel={handleCancelRequest}
         actionLoading={actionLoading}
       />
     </>
