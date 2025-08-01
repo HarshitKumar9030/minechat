@@ -258,4 +258,45 @@ public class FriendManager {
             return false;
         }
     }
+
+
+    public Document getFriendStats(UUID playerUUID) {
+        try {
+            int friendCount = getFriendCount(playerUUID);
+            int pendingRequests = (int) friendRequestsCollection.countDocuments(
+                new Document("targetUUID", playerUUID.toString()).append("status", "pending"));
+            int sentRequests = (int) friendRequestsCollection.countDocuments(
+                new Document("senderUUID", playerUUID.toString()).append("status", "pending"));
+            int maxFriends = plugin.getConfig().getInt("friends.max-friends", 50);
+
+            return new Document()
+                    .append("friendCount", friendCount)
+                    .append("pendingRequests", pendingRequests)
+                    .append("sentRequests", sentRequests)
+                    .append("maxFriends", maxFriends);
+        } catch (Exception e) {
+            plugin.getLogger().warning("Failed to get friend stats: " + e.getMessage());
+            return new Document()
+                    .append("friendCount", 0)
+                    .append("pendingRequests", 0)
+                    .append("sentRequests", 0)
+                    .append("maxFriends", 50);
+        }
+    }
+
+
+    public boolean cancelFriendRequest(UUID senderUUID, UUID targetUUID) {
+        try {
+            long deletedCount = friendRequestsCollection.deleteOne(
+                new Document("senderUUID", senderUUID.toString())
+                    .append("targetUUID", targetUUID.toString())
+                    .append("status", "pending")
+            ).getDeletedCount();
+
+            return deletedCount > 0;
+        } catch (Exception e) {
+            plugin.getLogger().warning("Failed to cancel friend request: " + e.getMessage());
+            return false;
+        }
+    }
 }

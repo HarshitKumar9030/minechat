@@ -13,6 +13,12 @@ const FriendsPage = () => {
   const [friends, setFriends] = useState<FriendInfo[]>([]);
   const [friendRequests, setFriendRequests] = useState<FriendRequest[]>([]);
   const [sentRequests, setSentRequests] = useState<FriendRequest[]>([]);
+  const [friendStats, setFriendStats] = useState<{
+    friendCount: number;
+    pendingRequests: number;
+    sentRequests: number;
+    maxFriends: number;
+  } | null>(null);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [user, setUser] = useState<{ playerUUID: string; playerName: string } | null>(null);
@@ -27,7 +33,15 @@ const FriendsPage = () => {
     if (savedUser) {
       try {
         const userData = JSON.parse(savedUser);
-        setUser({ playerUUID: userData.playerUUID, playerName: userData.playerName });
+        console.log('Friends: Using minimal user data for authentication:', {
+          playerUUID: userData.playerUUID,
+          playerName: userData.playerName
+        });
+        // Only use minimal data needed for API calls
+        setUser({ 
+          playerUUID: userData.playerUUID, 
+          playerName: userData.playerName 
+        });
       } catch (error) {
         console.error('Error parsing saved user data:', error);
         router.push('/');
@@ -42,26 +56,45 @@ const FriendsPage = () => {
     
     setLoading(true);
     try {
-      const [friendsResponse, requestsResponse] = await Promise.all([
+      const [friendsResponse, incomingResponse, outgoingResponse, statsResponse] = await Promise.all([
         api.getFriends(user.playerUUID),
-        api.getFriendRequests(user.playerUUID)
+        api.getIncomingFriendRequests(user.playerUUID),
+        api.getOutgoingFriendRequests(user.playerUUID),
+        api.getFriendStats(user.playerUUID)
       ]);
       
+
+      
       setFriends(friendsResponse.friends || []);
+      setFriendRequests(incomingResponse.requests || []);
+      setSentRequests(outgoingResponse.requests || []);
+      setFriendStats(statsResponse);
       
-      // Separate incoming and sent requests
-      const allRequests = requestsResponse.requests || [];
-      const incomingRequests = allRequests.filter(
-        request => request.senderUUID !== user.playerUUID
-      );
-      const sentRequests = allRequests.filter(
-        request => request.senderUUID === user.playerUUID
-      );
       
-      setFriendRequests(incomingRequests);
-      setSentRequests(sentRequests);
     } catch (error) {
       console.error('Failed to load friends data:', error);
+      try {
+        const [friendsResponse, requestsResponse] = await Promise.all([
+          api.getFriends(user.playerUUID),
+          api.getFriendRequests(user.playerUUID)
+        ]);
+        
+        setFriends(friendsResponse.friends || []);
+        
+        // seperate incoming and sent requests
+        const allRequests = requestsResponse.requests || [];
+        const incomingRequests = allRequests.filter(
+          request => request.senderUUID !== user.playerUUID
+        );
+        const sentRequests = allRequests.filter(
+          request => request.senderUUID === user.playerUUID
+        );
+        
+        setFriendRequests(incomingRequests);
+        setSentRequests(sentRequests);
+      } catch (fallbackError) {
+        console.error('Fallback failed:', fallbackError);
+      }
     } finally {
       setLoading(false);
     }
@@ -103,7 +136,6 @@ const FriendsPage = () => {
       return { success: true };
     } catch (error) {
       console.error('Failed to send friend request:', error);
-      // Extract error message from API response
       let errorMessage = 'Failed to send friend request';
       
       if (error instanceof Error) {
@@ -125,7 +157,7 @@ const FriendsPage = () => {
     setActionLoading(requesterUUID);
     try {
       await api.acceptFriendRequest(user.playerUUID, requesterUUID);
-      await loadFriendsData(); // Reload data
+      await loadFriendsData();
     } catch (error) {
       console.error('Failed to accept friend request:', error);
     } finally {
@@ -139,7 +171,7 @@ const FriendsPage = () => {
     setActionLoading(requesterUUID);
     try {
       await api.rejectFriendRequest(user.playerUUID, requesterUUID);
-      await loadFriendsData(); // Reload data
+      await loadFriendsData();
     } catch (error) {
       console.error('Failed to reject friend request:', error);
     } finally {
@@ -153,7 +185,7 @@ const FriendsPage = () => {
     setActionLoading(targetUUID);
     try {
       await api.cancelFriendRequest(user.playerUUID, targetUUID);
-      await loadFriendsData(); // Reload data
+      await loadFriendsData(); 
     } catch (error) {
       console.error('Failed to cancel friend request:', error);
     } finally {
@@ -167,7 +199,7 @@ const FriendsPage = () => {
     setActionLoading(friendUUID);
     try {
       await api.removeFriend(user.playerUUID, friendUUID);
-      await loadFriendsData(); // Reload data
+      await loadFriendsData(); 
     } catch (error) {
       console.error('Failed to remove friend:', error);
     } finally {
@@ -263,9 +295,14 @@ const FriendsPage = () => {
               <Users className="h-6 w-6 md:h-8 md:w-8 text-yellow-600 flex-shrink-0" />
               <div className="min-w-0">
                 <h3 className="text-lg md:text-2xl font-minecraftia text-neutral-200 mt-2 leading-none">
-                  {friends.length}
+                  {friendStats?.friendCount ?? friends.length}
+                  {friendStats?.maxFriends && (
+                    <span className="text-neutral-500 text-sm ml-1">
+                      / {friendStats.maxFriends}
+                    </span>
+                  )}
                 </h3>
-                <p className="text-neutral-400 font-minecraftia text-xs md:text-sm leading-none mt-2 md:mt-3">
+                <p className="text-neutral-400 font-minecraftia  text-xs md:text-sm leading-4 md:leading-none mt-2 md:mt-3">
                   Total Friends
                 </p>
               </div>
@@ -281,7 +318,7 @@ const FriendsPage = () => {
                 <h3 className="text-lg md:text-2xl font-minecraftia text-neutral-200 mt-2 leading-none">
                   {friends.filter(f => f.online).length}
                 </h3>
-                <p className="text-neutral-400 font-minecraftia text-xs md:text-sm leading-none mt-2 md:mt-3">
+                <p className="text-neutral-400  leading-4 md:leading-none font-minecraftia text-xs md:text-sm  mt-2 md:mt-3">
                   Online Now
                 </p>
               </div>
@@ -293,9 +330,9 @@ const FriendsPage = () => {
               <UserPlus className="h-6 w-6 md:h-8 md:w-8 text-blue-500 flex-shrink-0" />
               <div className="min-w-0">
                 <h3 className="text-lg md:text-2xl font-minecraftia text-neutral-200 mt-2 leading-none">
-                  {friendRequests.length + sentRequests.length}
+                  {(friendStats?.pendingRequests ?? friendRequests.length) + (friendStats?.sentRequests ?? sentRequests.length)}
                 </h3>
-                <p className="text-neutral-400 font-minecraftia text-xs md:text-sm leading-none mt-2 md:mt-3">
+                <p className="text-neutral-400 leading-4 md:leading-none font-minecraftia text-xs md:text-sm  mt-2 md:mt-3">
                   Friend Requests
                 </p>
               </div>
@@ -345,12 +382,22 @@ const FriendsPage = () => {
                     }`} />
                   </div>
 
-                  <h3 className="text-neutral-200 pt-2  font-minecraftia text-sm md:text-lg leading-none mb-1 truncate">
+                  <h3 className="text-neutral-200 pt-2 font-minecraftia text-sm md:text-lg leading-none mb-1 truncate">
                     {friend.friendName}
                   </h3>
+                  {friend.rank && (
+                    <p className="text-yellow-500 font-minecraftia text-xs leading-none mt-1 mb-2 truncate">
+                      {friend.rank}
+                    </p>
+                  )}
                   <p className="text-neutral-500 font-minecraftia text-xs leading-none mt-3">
                     {friend.online ? 'Online' : 'Offline'}
                   </p>
+                  {friend.lastSeen && !friend.online && (
+                    <p className="text-neutral-600 font-minecraftia text-xs leading-none mt-2 hidden md:block">
+                      Last seen {new Date(friend.lastSeen).toLocaleDateString()}
+                    </p>
+                  )}
                   <p className="text-neutral-600 font-minecraftia text-xs leading-none mt-2 hidden md:block">
                     Since {new Date(friend.timestamp).toLocaleDateString()}
                   </p>

@@ -1,9 +1,10 @@
 'use client';
-import React, { useState } from 'react';
-import { MoveRight, MoveLeft,  } from 'lucide-react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { MoveRight, MoveLeft } from 'lucide-react';
 import { SERVER_NAME } from '@/lib/constants';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
+import { MinechatAPI, Player, FriendInfo } from '@/lib/api';
 
 export interface NavigationCard {
     id: string;
@@ -46,7 +47,75 @@ const navigationCards = [
 
 const DashboardPage = () => {
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [user, setUser] = useState<{ playerUUID: string; playerName: string; rank?: string; } | null>(null);
+  const [userDetails, setUserDetails] = useState<Player | null>(null);
+  const [recentFriends, setRecentFriends] = useState<FriendInfo[]>([]);
+  const [loading, setLoading] = useState(true);
   const router = useRouter();
+  const api = useMemo(() => new MinechatAPI(), []);
+
+  useEffect(() => {
+    const savedUser = localStorage.getItem('minechat_user');
+    
+    if (savedUser) {
+      try {
+        const userData = JSON.parse(savedUser);
+        
+
+        setUser({ 
+          playerUUID: userData.playerUUID, 
+          playerName: userData.playerName,
+          rank: userData.rank // Keep for fallback only
+        });
+      } catch {
+        router.push('/');
+      }
+    } else {
+      router.push('/');
+    }
+  }, [router]);
+
+  const loadUserData = useCallback(async () => {
+    if (!user) return;
+    
+    setLoading(true);
+    try {
+      try {
+        const detailsResponse = await api.getUserDetails(user.playerUUID);
+        const freshUserData = detailsResponse.user;
+        setUserDetails(freshUserData);
+        
+      } catch {
+        setUserDetails({
+          playerName: user.playerName,
+          playerUUID: user.playerUUID,
+          rank: user.rank || '[Player]',
+          formattedRank: '§7[Player]',
+          online: false,
+          lastSeen: undefined,
+          firstJoin: undefined,
+          webAccessEnabled: false
+        });
+      }
+
+      try {
+        const friendsResponse = await api.getFriends(user.playerUUID);
+        setRecentFriends(friendsResponse.friends?.slice(0, 5) || []);
+      } catch {
+        setRecentFriends([]);
+      }
+      
+    } catch {
+    } finally {
+      setLoading(false);
+    }
+  }, [user, api]);
+
+  useEffect(() => {
+    if (user) {
+      loadUserData();
+    }
+  }, [user, loadUserData]);
 
   const nextSlide = () => {
     setCurrentIndex((prev) => (prev + 1) % navigationCards.length);
@@ -62,10 +131,30 @@ const DashboardPage = () => {
 
   return (
     <main className='min-h-screen w-full flex flex-col gap-8 justify-center items-center p-4'>
-      <div className="text-center">
-        <h1 className="text-2xl md:text-3xl font-minecraftia text-neutral-300 mb-2 leading-none">
-          Browse <span className='text-yellow-600'>{SERVER_NAME}</span>
+      <div className="text-center mb-6">
+        <h1 className="text-2xl md:text-3xl font-minecraftia text-neutral-300 mb-4 leading-none">
+          Welcome back, <span className='text-yellow-600'>{user?.playerName || 'Player'}</span>
         </h1>
+        <div className="flex items-center justify-center gap-2 text-neutral-500 font-minecraftia text-sm">
+          {userDetails?.rank && (
+            <>
+              <span className=" text-xs">
+                <span className=''>{userDetails.rank}</span>
+              </span>
+              <span>•</span>
+            </>
+          )}
+          <div className="flex items-center gap-1.5">
+            <div className={`w-2 h-2 mb-2.5 rounded-full ${userDetails?.online ? 'bg-green-500' : 'bg-red-500'}`}></div>
+            <span>{userDetails?.online ? ' Online' : 'Offline'}</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="text-center">
+        <h2 className="text-xl md:text-2xl font-minecraftia text-neutral-300 mb-2 leading-none">
+          Browse <span className='text-yellow-600'>{SERVER_NAME}</span>
+        </h2>
         <p className="text-neutral-500 font-minecraftia text-sm leading-none">
           Choose a section to explore
         </p>
@@ -166,6 +255,44 @@ const DashboardPage = () => {
           </button>
         </div>
       </div>
+
+      {!loading && recentFriends.length > 0 && (
+        <div className="w-full max-w-4xl">
+          <h3 className="text-lg font-minecraftia text-neutral-300 mb-4 text-center">
+            Recent Friends
+          </h3>
+          <div className="flex justify-center gap-4 overflow-x-auto pb-2">
+            {recentFriends.map((friend) => (
+              <div
+                key={friend.friendUUID}
+                className="flex-shrink-0 p-3 bg-neutral-800 border border-neutral-700 rounded-lg text-center min-w-[100px]"
+              >
+                <div className="relative inline-block mb-2">
+                  <Image
+                    src={`https://crafatar.com/avatars/${friend.friendUUID}?size=32&overlay`}
+                    alt={friend.friendName}
+                    width={32}
+                    height={32}
+                    className="rounded-lg"
+                    onError={(e) => {
+                      e.currentTarget.src = 'https://crafatar.com/avatars/5e9b103b-dfc2-4b59-be29-eb7523248b5d?size=32&overlay';
+                    }}
+                  />
+                  <div className={`absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full border border-neutral-800 ${
+                    friend.online ? 'bg-green-500' : 'bg-neutral-600'
+                  }`} />
+                </div>
+                <p className="text-neutral-200 font-minecraftia text-xs truncate">
+                  {friend.friendName}
+                </p>
+                <p className="text-neutral-500 font-minecraftia text-xs mt-1">
+                  {friend.online ? 'Online' : 'Offline'}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </main>
   );
 };

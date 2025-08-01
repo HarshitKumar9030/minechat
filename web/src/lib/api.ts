@@ -7,6 +7,9 @@ export interface Player {
   rank: string;
   formattedRank: string;
   online: boolean;
+  lastSeen?: number;        // Add last seen timestamp
+  firstJoin?: number;       // Add first join timestamp
+  webAccessEnabled?: boolean; // Add web access status
 }
 
 export interface AuthResponse {
@@ -19,6 +22,8 @@ export interface AuthResponse {
     formattedRank: string;
     online: boolean;
     loginTime: number;
+    lastSeen?: number;      // Add last seen to auth response
+    firstJoin?: number;     // Add first join to auth response
   };
   sessionToken?: string;
   error?: string;
@@ -29,15 +34,19 @@ export interface FriendInfo {
   friendUUID: string;
   timestamp: number;
   online: boolean;
+  lastSeen?: number;        
+  rank?: string;            
+  formattedRank?: string;   
 }
 
 export interface FriendRequest {
   senderUUID: string;
   senderName: string;
-  targetUUID?: string;    // for outgoing requests - who you sent the request to
-  targetName?: string;    // for outgoing requests - name of the person you sent request to
+  targetUUID?: string;      
+  targetName?: string;     
   timestamp: number;
   status: string;
+  isOutgoing?: boolean;    
 }
 
 export interface GroupInfo {
@@ -123,13 +132,16 @@ export class MinechatAPI {
       onlinePlayers: number; 
     }>('/players');
     
-    // trasform the data to match expected format
+    // Transform the data to match expected format with enhanced info
     const users = response.players.map(player => ({
       playerName: player.playerName,
       playerUUID: player.playerUUID,
       rank: player.currentRank || player.rank || '[Player]',
       formattedRank: player.formattedRank || '§7[Player]',
-      online: player.online || false
+      online: player.online || false,
+      lastSeen: player.lastSeen,
+      firstJoin: player.firstJoin,
+      webAccessEnabled: player.webAccessEnabled || false
     }));
 
     return { users };
@@ -139,12 +151,121 @@ export class MinechatAPI {
     return this.request<{ ranks: Player[] }>('/ranks');
   }
 
+  async getUserDetails(playerUUID: string): Promise<{ user: Player }> {
+    const response = await this.request<any>(`/users?playerUUID=${playerUUID}`);
+    
+    console.log('API getUserDetails raw response:', response);
+
+    const user = {
+      playerName: response.user?.playerName || response.playerName,
+      playerUUID: response.user?.playerUUID || response.playerUUID,
+      rank: response.user?.cleanRank || response.user?.rank || response.cleanRank || response.rank || '[Player]',
+      formattedRank: response.user?.formattedRank || response.formattedRank || '§7[Player]',
+      online: response.user?.online || response.online || false,
+      lastSeen: response.user?.lastSeen || response.lastSeen,
+      firstJoin: response.user?.firstJoin || response.firstJoin,
+      webAccessEnabled: response.user?.webAccessEnabled || response.webAccessEnabled || false
+    };
+
+    console.log('API getUserDetails mapped user:', user);
+    return { user };
+  }
+
+  async searchPlayers(query: string, limit: number = 10): Promise<{ players: Player[] }> {
+    const response = await this.request<{
+      players: any[];
+    }>(`/search-players?query=${encodeURIComponent(query)}&limit=${limit}`);
+
+    const players = response.players.map(player => ({
+      playerName: player.playerName,
+      playerUUID: player.playerUUID,
+      rank: player.rank || '[Player]',
+      formattedRank: player.formattedRank || '§7[Player]',
+      online: player.online || false,
+      lastSeen: player.lastSeen,
+      firstJoin: player.firstJoin,
+      webAccessEnabled: player.webAccessEnabled || false
+    }));
+
+    return { players };
+  }
+
   async getFriends(playerUUID: string): Promise<{ friends: FriendInfo[] }> {
-    return this.request<{ friends: FriendInfo[] }>(`/friends?playerUUID=${playerUUID}`);
+    const response = await this.request<{ friends: any[] }>(`/friends?playerUUID=${playerUUID}`);
+
+    const friends = response.friends.map(friend => ({
+      friendName: friend.friendName,
+      friendUUID: friend.friendUUID,
+      timestamp: friend.timestamp,
+      online: friend.online || false,
+      lastSeen: friend.lastSeen,
+      rank: friend.rank,
+      formattedRank: friend.formattedRank
+    }));
+
+    return { friends };
   }
 
   async getFriendRequests(playerUUID: string): Promise<{ requests: FriendRequest[] }> {
-    return this.request<{ requests: FriendRequest[] }>(`/friend-requests?playerUUID=${playerUUID}`);
+    const response = await this.request<{ requests: any[] }>(`/friend-requests?playerUUID=${playerUUID}`);
+
+    const requests = response.requests.map(request => ({
+      senderUUID: request.senderUUID,
+      senderName: request.senderName,
+      targetUUID: request.targetUUID,
+      targetName: request.targetName,
+      timestamp: request.timestamp,
+      status: request.status,
+      isOutgoing: !!request.targetUUID
+    }));
+
+    return { requests };
+  }
+
+  async getIncomingFriendRequests(playerUUID: string): Promise<{ requests: FriendRequest[] }> {
+    const response = await this.request<{ requests: any[] }>(`/friend-requests/incoming?playerUUID=${playerUUID}`);
+
+    const requests = response.requests.map(request => ({
+      senderUUID: request.senderUUID,
+      senderName: request.senderName,
+      targetUUID: request.targetUUID,
+      targetName: request.targetName,
+      timestamp: request.timestamp,
+      status: request.status,
+      isOutgoing: false
+    }));
+
+    return { requests };
+  }
+
+  async getOutgoingFriendRequests(playerUUID: string): Promise<{ requests: FriendRequest[] }> {
+    const response = await this.request<{ requests: any[] }>(`/friend-requests/outgoing?playerUUID=${playerUUID}`);
+
+    const requests = response.requests.map(request => ({
+      senderUUID: request.senderUUID,
+      senderName: request.senderName,
+      targetUUID: request.targetUUID,
+      targetName: request.targetName,
+      timestamp: request.timestamp,
+      status: request.status,
+      isOutgoing: true
+    }));
+
+    return { requests };
+  }
+
+  async getFriendStats(playerUUID: string): Promise<{
+    friendCount: number;
+    pendingRequests: number;
+    sentRequests: number;
+    maxFriends: number;
+  }> {
+    return this.request<{
+      friendCount: number;
+      pendingRequests: number;
+      sentRequests: number;
+      maxFriends: number;
+    }>(`/friend-stats?playerUUID=${playerUUID}`);
   }
 
   async sendFriendRequest(senderUUID: string, senderName: string, targetName: string) {

@@ -1,18 +1,57 @@
 'use client';
-import React, { useState } from 'react';
-import { X } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { X, Search, User } from 'lucide-react';
+import Image from 'next/image';
+import { api, Player, getPlayerHead } from '@/lib/api';
 
 interface AddFriendModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSubmit: (name: string) => Promise<{ success: boolean; error?: string }>;
   loading: boolean;
+
 }
 
 const AddFriendModal: React.FC<AddFriendModalProps> = ({ isOpen, onClose, onSubmit, loading }) => {
   const [friendName, setFriendName] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [searchResults, setSearchResults] = useState<Player[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [showResults, setShowResults] = useState(false);
+
+  const searchPlayers = useCallback(async (query: string) => {
+    if (query.length < 2) {
+      setSearchResults([]);
+      setShowResults(false);
+      return;
+    }
+
+    setSearching(true);
+    try {
+      const response = await api.searchPlayers(query, 5);
+      setSearchResults(response.players);
+      setShowResults(true);
+    } catch (error) {
+      console.error('Failed to search players:', error);
+      setSearchResults([]);
+    } finally {
+      setSearching(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      if (friendName.trim()) {
+        searchPlayers(friendName.trim());
+      } else {
+        setSearchResults([]);
+        setShowResults(false);
+      }
+    }, 300);
+
+    return () => clearTimeout(timeoutId);
+  }, [friendName, searchPlayers]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -20,12 +59,14 @@ const AddFriendModal: React.FC<AddFriendModalProps> = ({ isOpen, onClose, onSubm
     
     setError('');
     setSuccess('');
+    setShowResults(false);
     
     const result = await onSubmit(friendName.trim());
     
     if (result.success) {
       setSuccess('Friend request sent successfully!');
       setFriendName('');
+      setSearchResults([]);
       // Auto close after success with delay
       setTimeout(() => {
         setSuccess('');
@@ -36,10 +77,17 @@ const AddFriendModal: React.FC<AddFriendModalProps> = ({ isOpen, onClose, onSubm
     }
   };
 
+  const handleSelectPlayer = (playerName: string) => {
+    setFriendName(playerName);
+    setShowResults(false);
+  };
+
   const handleClose = () => {
     setFriendName('');
     setError('');
     setSuccess('');
+    setSearchResults([]);
+    setShowResults(false);
     onClose();
   };
 
@@ -47,6 +95,10 @@ const AddFriendModal: React.FC<AddFriendModalProps> = ({ isOpen, onClose, onSubm
     if (e.target === e.currentTarget) {
       handleClose();
     }
+  };
+
+  const handleImageError = (e: React.SyntheticEvent<HTMLImageElement>) => {
+    e.currentTarget.src = 'https://crafatar.com/avatars/5e9b103b-dfc2-4b59-be29-eb7523248b5d?size=64&overlay';
   };
 
   if (!isOpen) return null;
@@ -75,7 +127,7 @@ const AddFriendModal: React.FC<AddFriendModalProps> = ({ isOpen, onClose, onSubm
 
         {error && (
           <div className="mb-4 p-3 bg-red-900/30 border border-red-800/50 rounded-lg animate-in slide-in-from-top-2 duration-300">
-            <p className="text-red-400 font-minecraftia text-sm leading-none mt-3">
+            <p className="text-red-400 font-minecraftia text-sm leading-4 mt-3">
               {error}
             </p>
           </div>
@@ -83,27 +135,88 @@ const AddFriendModal: React.FC<AddFriendModalProps> = ({ isOpen, onClose, onSubm
 
         {success && (
           <div className="mb-4 p-3 bg-green-900/30 border border-green-800/50 rounded-lg animate-in slide-in-from-top-2 duration-300">
-            <p className="text-green-400 font-minecraftia text-sm leading-none mt-3">
+            <p className="text-green-400 font-minecraftia text-sm leading-4 mt-3">
               {success}
             </p>
           </div>
         )}
         
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
+          <div className="relative">
             <label className="block mt-2 text-neutral-300 font-minecraftia text-sm mb-2 leading-none">
               Player Name
             </label>
-            {/* Inter has to used cuz of some weird bug with minecraftia */}
-            <input
-              type="text"
-              placeholder="Enter player name..."
-              value={friendName}
-              onChange={(e) => setFriendName(e.target.value)}
-              className="w-full px-4 py-3 font-inter bg-neutral-900 border border-neutral-600 rounded-lg text-neutral-200 placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-yellow-600 focus:border-transparent  text-sm leading-none mt-3 transition-all duration-300"
-              required
-              autoFocus
-            />
+            <div className="relative">
+              <input
+                type="text"
+                placeholder="Start typing to search players..."
+                value={friendName}
+                onChange={(e) => setFriendName(e.target.value)}
+                className="w-full px-4 py-3 pl-10 font-inter bg-neutral-900 border border-neutral-600 rounded-lg text-neutral-200 placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-yellow-600 focus:border-transparent text-sm leading-none mt-3 transition-all duration-300"
+                required
+                autoFocus
+              />
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-neutral-500 mt-1.5" />
+              {searching && (
+                <div className="absolute right-3 top-1/2 transform -translate-y-1/2 mt-1.5">
+                  <div className="h-4 w-4 border-2 border-neutral-600 border-t-yellow-600 rounded-full animate-spin" />
+                </div>
+              )}
+            </div>
+            
+            {showResults && searchResults.length > 0 && (
+              <div className="absolute z-10 w-full mt-1 bg-neutral-800 border border-neutral-600 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                {searchResults.map((player, index) => (
+                  <button
+                    key={player.playerUUID || index}
+                    type="button"
+                    onClick={() => handleSelectPlayer(player.playerName)}
+                    className="w-full flex items-center gap-3 p-3 hover:bg-neutral-700 transition-colors duration-200 text-left first:rounded-t-lg last:rounded-b-lg"
+                  >
+                    <div className="relative flex-shrink-0">
+                      <Image
+                        src={getPlayerHead(player.playerName, player.playerUUID, 32)}
+                        alt={player.playerName}
+                        width={32}
+                        height={32}
+                        className="rounded-md"
+                        onError={handleImageError}
+                      />
+                      <div className={`absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-neutral-800 ${
+                        player.online ? 'bg-green-500' : 'bg-neutral-600'
+                      }`} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="font-minecraftia pt-1 text-neutral-200 text-xs truncate">
+                          {player.playerName}
+                        </span>
+                        {player.rank && (
+                          <span className="font-minecraftia pt-1 text-yellow-500 text-xs truncate">
+                            {player.rank}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-neutral-500 font-minecraftia text-xs mt-1">
+                        {player.online ? 'Online' : 'Offline'}
+                        {player.lastSeen && !player.online && (
+                          <span> • Last seen {new Date(player.lastSeen).toLocaleDateString()}</span>
+                        )}
+                      </p>
+                    </div>
+                    <User className="h-4 w-4 text-neutral-500 flex-shrink-0" />
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {showResults && searchResults.length === 0 && !searching && friendName.length >= 2 && (
+              <div className="absolute z-10 w-full mt-1 bg-neutral-800 border border-neutral-600 rounded-lg shadow-lg p-4 text-center">
+                <p className="text-neutral-500 font-minecraftia text-xs">
+                  No players found matching &ldquo;{friendName}&rdquo;
+                </p>
+              </div>
+            )}
           </div>
           
           <div className="flex gap-3 pt-2">

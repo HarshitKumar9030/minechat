@@ -325,4 +325,98 @@ public class UserDataManager {
             return new ArrayList<>();
         }
     }
+
+
+    public void cachePlayerData(UUID playerUUID, String playerName, String cleanRank, String formattedRank) {
+        try {
+            Document playerDoc = new Document()
+                    .append("playerUUID", playerUUID.toString())
+                    .append("playerName", playerName)
+                    .append("cleanRank", cleanRank)
+                    .append("formattedRank", formattedRank)
+                    .append("webAccessEnabled", false) // default to false, can be enabled later
+                    .append("lastSeen", System.currentTimeMillis())
+                    .append("firstJoin", System.currentTimeMillis());
+
+            // only insert if player doesn't already exist (preserves existing web passwords)
+            Document existingPlayer = userCollection.find(new Document("playerUUID", playerUUID.toString())).first();
+            if (existingPlayer == null) {
+                userCollection.insertOne(playerDoc);
+                plugin.getLogger().info("Added new player to database: " + playerName);
+            } else {
+                userCollection.updateOne(
+                    new Document("playerUUID", playerUUID.toString()),
+                    new Document("$set", new Document()
+                        .append("playerName", playerName) // update name in case it changed
+                        .append("cleanRank", cleanRank)
+                        .append("formattedRank", formattedRank)
+                        .append("lastSeen", System.currentTimeMillis())
+                    )
+                );
+            }
+        } catch (Exception e) {
+            plugin.getLogger().warning("Failed to cache player data for " + playerName + ": " + e.getMessage());
+        }
+    }
+
+    // alaso update player data when they leave
+    public void updatePlayerData(UUID playerUUID, String playerName, String cleanRank, String formattedRank, long lastSeen) {
+        try {
+            userCollection.updateOne(
+                new Document("playerUUID", playerUUID.toString()),
+                new Document("$set", new Document()
+                    .append("playerName", playerName)
+                    .append("cleanRank", cleanRank)
+                    .append("formattedRank", formattedRank)
+                    .append("lastSeen", lastSeen)
+                )
+            );
+        } catch (Exception e) {
+            plugin.getLogger().warning("Failed to update player data for " + playerName + ": " + e.getMessage());
+        }
+    }
+
+
+    public List<Document> searchPlayersByName(String query) {
+        try {
+            List<Document> players = new ArrayList<>();
+
+            // regex for case-insensitive partial matching
+            Document filter = new Document("playerName",
+                new Document("$regex", ".*" + query + ".*").append("$options", "i"));
+
+            for (Document userDoc : userCollection.find(filter).limit(20)) {
+                String playerName = userDoc.getString("playerName");
+                String playerUUID = userDoc.getString("playerUUID");
+                Player player = Bukkit.getPlayerExact(playerName);
+
+                Document playerDoc = new Document()
+                        .append("playerName", playerName)
+                        .append("playerUUID", playerUUID)
+                        .append("webAccessEnabled", userDoc.getBoolean("webAccessEnabled", false))
+                        .append("firstJoin", userDoc.getLong("firstJoin"))
+                        .append("lastSeen", userDoc.getLong("lastSeen"));
+
+                if (player != null && player.isOnline()) {
+                    String cleanRank = plugin.getRankManager().getCleanRank(player);
+                    String formattedRank = plugin.getRankManager().getFormattedRank(player);
+
+                    playerDoc.append("rank", cleanRank)
+                           .append("formattedRank", formattedRank)
+                           .append("online", true);
+                } else {
+                    Document cachedRank = getCachedRankData(userDoc);
+                    playerDoc.append("rank", cachedRank.getString("cleanRank"))
+                           .append("formattedRank", cachedRank.getString("formattedRank"))
+                           .append("online", false);
+                }
+
+                players.add(playerDoc);
+            }
+            return players;
+        } catch (Exception e) {
+            plugin.getLogger().warning("Failed to search players: " + e.getMessage());
+            return new ArrayList<>();
+        }
+    }
 }

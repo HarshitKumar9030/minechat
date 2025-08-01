@@ -10,6 +10,7 @@ import me.harshit.minechat.database.FriendManager;
 import me.harshit.minechat.database.GroupManager;
 import me.harshit.minechat.database.UserDataManager;
 import me.harshit.minechat.listeners.ChatListener;
+import me.harshit.minechat.listeners.PlayerDataListener;
 import me.harshit.minechat.ranks.RankManager;
 import me.harshit.minechat.web.EmbeddedWebServer;
 import net.kyori.adventure.text.Component;
@@ -27,6 +28,7 @@ public final class Minechat extends JavaPlugin {
     private FriendAPI friendAPI;
     private EmbeddedWebServer webServer;
     private ChatListener chatListener;
+    private PlayerDataListener playerDataListener;
     private ChatCommandHandler commandHandler;
     private FriendCommandHandler friendCommandHandler;
     private GroupCommandHandler groupCommandHandler;
@@ -68,12 +70,16 @@ public final class Minechat extends JavaPlugin {
         // Initialize chat listener with rank manager
         chatListener = new ChatListener(this, databaseManager, rankManager);
 
+        playerDataListener = new PlayerDataListener(this, userDataManager);
+
         // Initialize command handlers
         commandHandler = new ChatCommandHandler(this, databaseManager, userDataManager, friendManager);
         friendCommandHandler = new FriendCommandHandler(this, friendManager, userDataManager);
         groupCommandHandler = new GroupCommandHandler(this, groupManager);
 
+        // Register event listeners
         getServer().getPluginManager().registerEvents(chatListener, this);
+        getServer().getPluginManager().registerEvents(playerDataListener, this);
 
         registerCommands();
 

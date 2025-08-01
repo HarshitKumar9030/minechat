@@ -142,12 +142,12 @@ const FriendRequestsModal: React.FC<FriendRequestsModalProps> = ({
                     </div>
 
                     <div className="flex-1 min-w-0">
-                      <h3 className="text-neutral-200 font-minecraftia text-xs sm:text-sm leading-none truncate">
+                      <h3 className="text-neutral-200 pt-2 font-minecraftia text-xs sm:text-sm leading-none truncate">
                         {displayName}
                       </h3>
-                      <p className="text-neutral-500 font-minecraftia text-xs leading-none mt-2 sm:mt-3 truncate">
-                        <span className="hidden sm:inline">
-                          {isIncoming ? 'Sent request' : 'Sent to you'} 
+                      <p className="text-neutral-500 pt-2 font-minecraftia text-xs leading-none mt-2 sm:mt-3 truncate">
+                        <span className="hidden  sm:inline">
+                          {isIncoming ? 'Sent request' : 'Sent by you'} 
                         </span>
                         <span className="sm:hidden">
                           {isIncoming ? 'From' : 'To'} 

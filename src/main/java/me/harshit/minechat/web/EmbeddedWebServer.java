@@ -70,6 +70,13 @@ public class EmbeddedWebServer {
             server.createContext("/api/users", new UsersHandler());
             server.createContext("/api/friend-requests", new FriendRequestsHandler());
 
+            server.createContext("/api/players", new PlayersHandler());
+            server.createContext("/api/search-players", new SearchPlayersHandler());
+            server.createContext("/api/friend-requests/incoming", new IncomingFriendRequestsHandler());
+            server.createContext("/api/friend-requests/outgoing", new OutgoingFriendRequestsHandler());
+            server.createContext("/api/friend-stats", new FriendStatsHandler());
+            server.createContext("/api/cancel-friend-request", new CancelFriendRequestHandler());
+
             // nothing just a test endpoint
             server.createContext("/api/test", new TestHandler());
 
@@ -677,7 +684,185 @@ public class EmbeddedWebServer {
         }
     }
 
-    // Helper methods
+    private class PlayersHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            new CORSHandler().handle(exchange);
+
+            if ("GET".equals(exchange.getRequestMethod())) {
+                try {
+                    List<Document> allPlayers = userDataManager.getAllPlayers();
+                    
+                    Map<String, Object> response = Map.of(
+                        "players", allPlayers,
+                        "totalPlayers", allPlayers.size(),
+                        "onlinePlayers", (int) allPlayers.stream().filter(p -> 
+                            p.getBoolean("online", false)).count()
+                    );
+                    sendJsonResponse(exchange, response, 200);
+
+                } catch (Exception e) {
+                    sendErrorResponse(exchange, "Internal server error", 500);
+                }
+            } else {
+                sendErrorResponse(exchange, "Method not allowed", 405);
+            }
+        }
+    }
+
+    private class SearchPlayersHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            new CORSHandler().handle(exchange);
+
+            if ("GET".equals(exchange.getRequestMethod())) {
+                try {
+                    String query = exchange.getRequestURI().getQuery();
+                    String searchQuery = getQueryParam(query, "query");
+                    String limitParam = getQueryParam(query, "limit");
+
+                    if (searchQuery == null) {
+                        sendErrorResponse(exchange, "Query parameter is required", 400);
+                        return;
+                    }
+
+                    List<Document> players = userDataManager.searchPlayersByName(searchQuery);
+                    
+                    // apply limit if specified
+                    if (limitParam != null) {
+                        try {
+                            int limit = Integer.parseInt(limitParam);
+                            if (players.size() > limit) {
+                                players = players.subList(0, limit);
+                            }
+                        } catch (NumberFormatException e) {
+                            // ignore invalid limit, use all results
+                        }
+                    }
+
+                    Map<String, Object> response = Map.of("players", players);
+                    sendJsonResponse(exchange, response, 200);
+
+                } catch (Exception e) {
+                    sendErrorResponse(exchange, "Internal server error", 500);
+                }
+            } else {
+                sendErrorResponse(exchange, "Method not allowed", 405);
+            }
+        }
+    }
+
+    private class IncomingFriendRequestsHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            new CORSHandler().handle(exchange);
+
+            if ("GET".equals(exchange.getRequestMethod())) {
+                try {
+                    String query = exchange.getRequestURI().getQuery();
+                    String playerUUID = getQueryParam(query, "playerUUID");
+
+                    if (playerUUID == null) {
+                        sendErrorResponse(exchange, "Player UUID required", 400);
+                        return;
+                    }
+
+                    List<Document> requests = friendManager.getIncomingFriendRequests(UUID.fromString(playerUUID));
+                    Map<String, Object> response = Map.of("requests", requests);
+                    sendJsonResponse(exchange, response, 200);
+
+                } catch (Exception e) {
+                    sendErrorResponse(exchange, "Internal server error", 500);
+                }
+            } else {
+                sendErrorResponse(exchange, "Method not allowed", 405);
+            }
+        }
+    }
+
+    private class OutgoingFriendRequestsHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            new CORSHandler().handle(exchange);
+
+            if ("GET".equals(exchange.getRequestMethod())) {
+                try {
+                    String query = exchange.getRequestURI().getQuery();
+                    String playerUUID = getQueryParam(query, "playerUUID");
+
+                    if (playerUUID == null) {
+                        sendErrorResponse(exchange, "Player UUID required", 400);
+                        return;
+                    }
+
+                    List<Document> requests = friendManager.getOutgoingFriendRequests(UUID.fromString(playerUUID));
+                    Map<String, Object> response = Map.of("requests", requests);
+                    sendJsonResponse(exchange, response, 200);
+
+                } catch (Exception e) {
+                    sendErrorResponse(exchange, "Internal server error", 500);
+                }
+            } else {
+                sendErrorResponse(exchange, "Method not allowed", 405);
+            }
+        }
+    }
+
+    private class FriendStatsHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            new CORSHandler().handle(exchange);
+
+            if ("GET".equals(exchange.getRequestMethod())) {
+                try {
+                    String query = exchange.getRequestURI().getQuery();
+                    String playerUUID = getQueryParam(query, "playerUUID");
+
+                    if (playerUUID == null) {
+                        sendErrorResponse(exchange, "Player UUID required", 400);
+                        return;
+                    }
+
+                    Document stats = friendManager.getFriendStats(UUID.fromString(playerUUID));
+                    Map<String, Object> response = Map.of("stats", stats);
+                    sendJsonResponse(exchange, response, 200);
+
+                } catch (Exception e) {
+                    sendErrorResponse(exchange, "Internal server error", 500);
+                }
+            } else {
+                sendErrorResponse(exchange, "Method not allowed", 405);
+            }
+        }
+    }
+
+    private class CancelFriendRequestHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            new CORSHandler().handle(exchange);
+
+            if ("POST".equals(exchange.getRequestMethod())) {
+                try {
+                    String requestBody = readRequestBody(exchange);
+                    JsonObject json = gson.fromJson(requestBody, JsonObject.class);
+
+                    String playerUUID = json.get("playerUUID").getAsString();
+                    String requestId = json.get("requestId").getAsString();
+
+                    boolean success = friendManager.cancelFriendRequest(UUID.fromString(playerUUID), UUID.fromString(requestId));
+
+                    Map<String, Object> response = Map.of("success", success);
+                    sendJsonResponse(exchange, response, success ? 200 : 400);
+
+                } catch (Exception e) {
+                    sendErrorResponse(exchange, "Internal server error", 500);
+                }
+            } else {
+                sendErrorResponse(exchange, "Method not allowed", 405);
+            }
+        }
+    }
+
     private String readRequestBody(HttpExchange exchange) throws IOException {
         InputStream inputStream = exchange.getRequestBody();
         return new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
@@ -718,7 +903,7 @@ public class EmbeddedWebServer {
     }
 
     private String getPlayerNameByUUID(UUID playerUUID) {
-        // Try to get from online players first
+        // try to get from online players first
         Player player = Bukkit.getPlayer(playerUUID);
         if (player != null) {
             return player.getName();
