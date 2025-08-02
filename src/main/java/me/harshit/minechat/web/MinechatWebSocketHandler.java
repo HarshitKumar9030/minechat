@@ -2,192 +2,230 @@ package me.harshit.minechat.web;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import me.harshit.minechat.Minechat;
 import org.eclipse.jetty.websocket.api.Session;
 import org.eclipse.jetty.websocket.api.WebSocketAdapter;
-import org.eclipse.jetty.websocket.api.annotations.*;
+import org.eclipse.jetty.websocket.api.annotations.OnWebSocketClose;
+import org.eclipse.jetty.websocket.api.annotations.OnWebSocketConnect;
+import org.eclipse.jetty.websocket.api.annotations.OnWebSocketError;
+import org.eclipse.jetty.websocket.api.annotations.OnWebSocketMessage;
+import org.eclipse.jetty.websocket.api.annotations.WebSocket;
 
-import java.io.IOException;
 import java.util.Map;
-import java.util.UUID;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 @WebSocket
 public class MinechatWebSocketHandler extends WebSocketAdapter {
 
+    private static final Map<String, Session> sessions = new ConcurrentHashMap<>();
+    private static final Map<Session, String> sessionIds = new ConcurrentHashMap<>();
+
     private final Minechat plugin;
-    private final Gson gson;
     private final WebAPIHandler apiHandler;
-
-
-    private static final Map<Session, String> sessionToId = new ConcurrentHashMap<>();
-    private static final Map<String, Session> idToSession = new ConcurrentHashMap<>();
+    private final Gson gson;
+    private String sessionId;
 
     public MinechatWebSocketHandler(Minechat plugin, WebAPIHandler apiHandler) {
         this.plugin = plugin;
-        this.gson = new Gson();
         this.apiHandler = apiHandler;
+        this.gson = new Gson();
     }
 
+    @Override
     @OnWebSocketConnect
-    public void onConnect(Session session) {
-        String sessionId = generateSessionId();
-        sessionToId.put(session, sessionId);
-        idToSession.put(sessionId, session);
+    public void onWebSocketConnect(Session session) {
+        super.onWebSocketConnect(session);
+        this.sessionId = generateSessionId();
+        sessions.put(sessionId, session);
+        sessionIds.put(session, sessionId);
 
-        plugin.getLogger().info("New WebSocket connection established: " + sessionId);
+        plugin.getLogger().info("WebSocket connection established: " + sessionId);
 
-        sendMessage(session, "connection", Map.of(
-            "success", true,
-            "sessionId", sessionId,
-            "message", "Connected to Minechat WebSocket"
-        ));
+        // Send connection confirmation
+        JsonObject response = new JsonObject();
+        response.addProperty("type", "connection");
+        response.addProperty("sessionId", sessionId);
+        response.addProperty("status", "connected");
+
+        sendMessage(session, response);
     }
 
-    @OnWebSocketClose
-    public void onClose(Session session, int statusCode, String reason) {
-        String sessionId = sessionToId.remove(session);
-        if (sessionId != null) {
-            idToSession.remove(sessionId);
-            apiHandler.removeSession(sessionId);
-            plugin.getLogger().info("WebSocket connection closed: " + sessionId + " - " + reason);
-        }
-    }
-
+    @Override
     @OnWebSocketMessage
-    public void onMessage(Session session, String message) {
+    public void onWebSocketText(String message) {
         try {
-            // json instead of map
-            JsonObject messageObj = gson.fromJson(message, JsonObject.class);
-            String type = messageObj.has("type") ? messageObj.get("type").getAsString() : null;
-            JsonObject data = messageObj.has("data") ? messageObj.getAsJsonObject("data") : new JsonObject();
-            String sessionId = sessionToId.get(session);
+            JsonObject json = JsonParser.parseString(message).getAsJsonObject();
 
-            if (sessionId == null) {
-                sendError(session, "Invalid session");
-                return;
-            }
+            String type = json.get("type").getAsString();
+            JsonObject data = json.has("data") ? json.getAsJsonObject("data") : new JsonObject();
 
-            if (type == null) {
-                sendError(session, "Message type is required");
-                return;
-            }
+            plugin.getLogger().info("WebSocket message received: " + type + " from session: " + sessionId);
 
+            // Handle authentication
             if ("auth".equals(type)) {
-                Map<String, Object> authData = new java.util.HashMap<>();
-                if (data.has("username")) {
-                    authData.put("username", data.get("username").getAsString());
-                }
-                if (data.has("password")) {
-                    authData.put("password", data.get("password").getAsString());
-                }
-                handleAuthentication(session, sessionId, authData);
-            } else if ("ping".equals(type)) {
-                // Handle ping/pong for connection keepalive
-                sendMessage(session, "pong", Map.of("timestamp", System.currentTimeMillis()));
-            } else {
-                apiHandler.handleWebMessage(sessionId, type, data);
+                handleAuthentication(data);
+                return;
             }
+
+            // Route to API handler for other message types
+            if (apiHandler != null) {
+                apiHandler.handleWebMessage(sessionId, type, data);
+            } else {
+                sendError("API handler not available");
+            }
+
         } catch (Exception e) {
             plugin.getLogger().warning("Error processing WebSocket message: " + e.getMessage());
-            e.printStackTrace();
-            sendError(session, "Invalid message format");
+            sendError("Invalid message format");
         }
     }
 
-    @OnWebSocketError
-    public void onError(Session session, Throwable error) {
-        String sessionId = sessionToId.get(session);
-        plugin.getLogger().warning("WebSocket error for session " + sessionId + ": " + error.getMessage());
-        error.printStackTrace();
+    @Override
+    @OnWebSocketClose
+    public void onWebSocketClose(int statusCode, String reason) {
+        super.onWebSocketClose(statusCode, reason);
+
+        if (sessionId != null) {
+            sessions.remove(sessionId);
+            sessionIds.remove(getSession());
+
+            if (apiHandler != null) {
+                apiHandler.removeSession(sessionId);
+            }
+
+            plugin.getLogger().info("WebSocket connection closed: " + sessionId + " (Code: " + statusCode + ", Reason: " + reason + ")");
+        }
     }
 
-    private void handleAuthentication(Session session, String sessionId, Map<String, Object> data) {
-        try {
-            String username = (String) data.get("username");
-            String password = (String) data.get("password");
+    @Override
+    @OnWebSocketError
+    public void onWebSocketError(Throwable cause) {
+        super.onWebSocketError(cause);
+        plugin.getLogger().warning("WebSocket error for session " + sessionId + ": " + cause.getMessage());
+        cause.printStackTrace();
+    }
 
-            if (username == null || password == null) {
-                sendMessage(session, "auth_response", Map.of(
-                    "success", false,
-                    "error", "Username and password required"
-                ));
-                return;
-            }
+    private void handleAuthentication(JsonObject data) {
+        try {
+            String username = data.get("username").getAsString();
+            String password = data.get("password").getAsString();
 
             boolean authenticated = apiHandler.authenticateSession(sessionId, username, password);
 
+            JsonObject response = new JsonObject();
+            response.addProperty("type", "auth_response");
+            response.addProperty("success", authenticated);
+
             if (authenticated) {
-                sendMessage(session, "auth_response", Map.of(
-                    "success", true,
-                    "sessionId", sessionId,
-                    "username", username,
-                    "message", "Authentication successful"
-                ));
+                response.addProperty("message", "Authentication successful");
+                response.addProperty("username", username);
                 plugin.getLogger().info("WebSocket authentication successful for: " + username);
             } else {
-                sendMessage(session, "auth_response", Map.of(
-                    "success", false,
-                    "error", "Invalid credentials"
-                ));
+                response.addProperty("message", "Authentication failed");
+                plugin.getLogger().warning("WebSocket authentication failed for: " + username);
+            }
+
+            sendMessage(getSession(), response);
+
+        } catch (Exception e) {
+            plugin.getLogger().warning("Error during WebSocket authentication: " + e.getMessage());
+            sendError("Authentication error");
+        }
+    }
+
+    private void sendMessage(Session session, JsonObject message) {
+        try {
+            if (session != null && session.isOpen()) {
+                String jsonString = gson.toJson(message);
+                session.getRemote().sendString(jsonString);
             }
         } catch (Exception e) {
-            plugin.getLogger().warning("Authentication error: " + e.getMessage());
-            sendError(session, "Authentication failed");
+            plugin.getLogger().warning("Error sending WebSocket message: " + e.getMessage());
         }
     }
 
-    public static void sendToSession(String sessionId, String type, Object data) {
-        Session session = idToSession.get(sessionId);
-        if (session != null && session.isOpen()) {
-            sendMessage(session, type, data);
-        }
+    private void sendError(String errorMessage) {
+        JsonObject error = new JsonObject();
+        error.addProperty("type", "error");
+        error.addProperty("message", errorMessage);
+
+        sendMessage(getSession(), error);
     }
 
+    private String generateSessionId() {
+        return "ws-" + System.currentTimeMillis() + "-" + Math.random();
+    }
+
+    // static methods for external access
     public static boolean isSessionConnected(String sessionId) {
-        Session session = idToSession.get(sessionId);
+        Session session = sessions.get(sessionId);
         return session != null && session.isOpen();
     }
 
+    public static void sendToSession(String sessionId, String type, Object data) {
+        Session session = sessions.get(sessionId);
+        if (session != null && session.isOpen()) {
+            try {
+                JsonObject message = new JsonObject();
+                message.addProperty("type", type);
+                message.add("data", new Gson().toJsonTree(data));
+                message.addProperty("timestamp", System.currentTimeMillis());
+
+                String jsonString = new Gson().toJson(message);
+                session.getRemote().sendString(jsonString);
+            } catch (Exception e) {
+                System.err.println("Error sending message to WebSocket session " + sessionId + ": " + e.getMessage());
+            }
+        }
+    }
+
+    public static Set<String> getActiveSessionIds() {
+        return sessions.keySet();
+    }
+
+    public static int getActiveSessionCount() {
+        return sessions.size();
+    }
+
     public static void broadcastToAll(String type, Object data) {
-        idToSession.values().forEach(session -> {
-            if (session.isOpen()) {
-                sendMessage(session, type, data);
+        JsonObject message = new JsonObject();
+        message.addProperty("type", type);
+        message.add("data", new Gson().toJsonTree(data));
+        message.addProperty("timestamp", System.currentTimeMillis());
+
+        String jsonString = new Gson().toJson(message);
+
+        sessions.values().forEach(session -> {
+            try {
+                if (session.isOpen()) {
+                    session.getRemote().sendString(jsonString);
+                }
+            } catch (Exception e) {
+                System.err.println("Error broadcasting WebSocket message: " + e.getMessage());
             }
         });
     }
 
-    public static java.util.Set<String> getActiveSessionIds() {
-        return idToSession.keySet();
-    }
-
-    private static void sendMessage(Session session, String type, Object data) {
-        if (session != null && session.isOpen()) {
-            try {
-                Map<String, Object> response = Map.of(
-                    "type", type,
-                    "data", data,
-                    "timestamp", System.currentTimeMillis()
-                );
-
-                String json = new Gson().toJson(response);
-                session.getRemote().sendString(json);
-            } catch (IOException e) {
-                System.err.println("Failed to send WebSocket message: " + e.getMessage());
-            }
-        }
-    }
-
-    private void sendError(Session session, String error) {
-        sendMessage(session, "error", Map.of("message", error));
-    }
-
-    private String generateSessionId() {
-        return UUID.randomUUID().toString();
-    }
-
     public static void cleanup() {
-        sessionToId.clear();
-        idToSession.clear();
+        try {
+            // close all open sessions
+            sessions.values().forEach(session -> {
+                try {
+                    if (session.isOpen()) {
+                        session.close();
+                    }
+                } catch (Exception e) {
+                    System.err.println("Error closing WebSocket session: " + e.getMessage());
+                }
+            });
+
+            // Clear all session collections
+            sessions.clear();
+            sessionIds.clear();
+        } catch (Exception e) {
+            System.err.println("Error during WebSocket cleanup: " + e.getMessage());
+        }
     }
 }

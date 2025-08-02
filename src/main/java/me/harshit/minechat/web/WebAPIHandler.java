@@ -96,6 +96,54 @@ public class WebAPIHandler {
                 handleGetOnlinePlayers(session);
                 break;
 
+            case "group_announcement":
+                handleWebGroupAnnouncement(session, data);
+                break;
+
+            case "kick_group_member":
+                handleKickGroupMember(session, data);
+                break;
+
+            case "promote_group_member":
+                handlePromoteGroupMember(session, data);
+                break;
+
+            case "ban_group_member":
+                handleBanGroupMember(session, data);
+                break;
+
+            case "mute_group_member":
+                handleMuteGroupMember(session, data);
+                break;
+
+            case "search_groups":
+                handleSearchGroups(session, data);
+                break;
+
+            case "join_group_by_code":
+                handleJoinGroupByCode(session, data);
+                break;
+
+            case "get_group_members":
+                handleGetGroupMembers(session, data);
+                break;
+
+            case "send_group_invite":
+                handleSendGroupInvite(session, data);
+                break;
+
+            case "create_group":
+                handleCreateGroup(session, data);
+                break;
+
+            case "leave_group":
+                handleLeaveGroup(session, data);
+                break;
+
+            case "get_group_invite_code":
+                handleGetGroupInviteCode(session, data);
+                break;
+
             default:
                 plugin.getLogger().warning("Unknown web message type: " + messageType);
                 sendWebResponse(sessionId, "error", "Unknown message type: " + messageType);
@@ -161,8 +209,8 @@ public class WebAPIHandler {
         String message = data.get("message").getAsString();
 
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
-            // Find the group
-            List<Document> playerGroups = groupManager.getPlayerGroups(session.getPlayerId());
+            // find the group
+            List<Document> playerGroups = groupManager.getPlayerGroupsAsDocuments(session.getPlayerId());
             Document group = playerGroups.stream()
                     .filter(g -> g.getString("groupName").equalsIgnoreCase(groupName))
                     .findFirst()
@@ -244,7 +292,7 @@ public class WebAPIHandler {
     // send group list to web
     private void handleGetGroups(WebSession session) {
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
-            List<Document> groups = groupManager.getPlayerGroups(session.getPlayerId());
+            List<Document> groups = groupManager.getPlayerGroupsAsDocuments(session.getPlayerId());
 
             Map<String, Object> response = new HashMap<>();
             response.put("groups", groups.stream().map(group -> {
@@ -382,6 +430,355 @@ public class WebAPIHandler {
         ));
     }
 
+    private void handleWebGroupAnnouncement(WebSession session, JsonObject data) {
+        String groupId = data.get("groupId").getAsString();
+        String announcement = data.get("announcement").getAsString();
+
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            if (!groupManager.isGroupAdmin(UUID.fromString(groupId), session.getPlayerId())) {
+                sendWebResponse(session.getSessionId(), "error", "You don't have permission to make announcements");
+                return;
+            }
+
+            boolean success = groupManager.updateGroupAnnouncement(UUID.fromString(groupId), announcement);
+
+            if (success) {
+                sendWebResponse(session.getSessionId(), "announcement_updated", Map.of(
+                    "groupId", groupId,
+                    "announcement", announcement
+                ));
+
+                broadcastToGroupWebSessions(UUID.fromString(groupId), "group_announcement", Map.of(
+                    "groupId", groupId,
+                    "announcement", announcement,
+                    "updatedBy", session.getPlayerName()
+                ));
+            } else {
+                sendWebResponse(session.getSessionId(), "error", "Failed to update announcement");
+            }
+        });
+    }
+
+    private void handleKickGroupMember(WebSession session, JsonObject data) {
+        String groupId = data.get("groupId").getAsString();
+        String targetName = data.get("targetName").getAsString();
+
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            if (!groupManager.isGroupAdmin(UUID.fromString(groupId), session.getPlayerId())) {
+                sendWebResponse(session.getSessionId(), "error", "You don't have permission to kick members");
+                return;
+            }
+
+            Player target = Bukkit.getPlayerExact(targetName);
+            if (target == null) {
+                sendWebResponse(session.getSessionId(), "error", "Player not found");
+                return;
+            }
+
+            boolean success = groupManager.removePlayerFromGroup(UUID.fromString(groupId), target.getUniqueId());
+
+            if (success) {
+                sendWebResponse(session.getSessionId(), "member_kicked", Map.of(
+                    "groupId", groupId,
+                    "targetName", targetName
+                ));
+
+                broadcastToGroupWebSessions(UUID.fromString(groupId), "member_kicked", Map.of(
+                    "groupId", groupId,
+                    "targetName", targetName,
+                    "kickedBy", session.getPlayerName()
+                ));
+            } else {
+                sendWebResponse(session.getSessionId(), "error", "Failed to kick member");
+            }
+        });
+    }
+
+    private void handlePromoteGroupMember(WebSession session, JsonObject data) {
+        String groupId = data.get("groupId").getAsString();
+        String targetName = data.get("targetName").getAsString();
+
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            if (!groupManager.isGroupOwner(UUID.fromString(groupId), session.getPlayerId())) {
+                sendWebResponse(session.getSessionId(), "error", "Only group owners can promote members");
+                return;
+            }
+
+            Player target = Bukkit.getPlayerExact(targetName);
+            if (target == null) {
+                sendWebResponse(session.getSessionId(), "error", "Player not found");
+                return;
+            }
+
+            boolean success = groupManager.promoteGroupMember(UUID.fromString(groupId), target.getUniqueId());
+
+            if (success) {
+                sendWebResponse(session.getSessionId(), "member_promoted", Map.of(
+                    "groupId", groupId,
+                    "targetName", targetName
+                ));
+
+                // Notify group members
+                broadcastToGroupWebSessions(UUID.fromString(groupId), "member_promoted", Map.of(
+                    "groupId", groupId,
+                    "targetName", targetName,
+                    "promotedBy", session.getPlayerName()
+                ));
+            } else {
+                sendWebResponse(session.getSessionId(), "error", "Failed to promote member");
+            }
+        });
+    }
+
+    private void handleBanGroupMember(WebSession session, JsonObject data) {
+        String groupId = data.get("groupId").getAsString();
+        String targetName = data.get("targetName").getAsString();
+
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            // Verify user is group admin/owner
+            if (!groupManager.isGroupAdmin(UUID.fromString(groupId), session.getPlayerId())) {
+                sendWebResponse(session.getSessionId(), "error", "You don't have permission to ban members");
+                return;
+            }
+
+            Player target = Bukkit.getPlayerExact(targetName);
+            if (target == null) {
+                sendWebResponse(session.getSessionId(), "error", "Player not found");
+                return;
+            }
+
+            boolean success = groupManager.banPlayerFromGroup(UUID.fromString(groupId), target.getUniqueId());
+
+            if (success) {
+                sendWebResponse(session.getSessionId(), "member_banned", Map.of(
+                    "groupId", groupId,
+                    "targetName", targetName
+                ));
+
+                // Notify group members
+                broadcastToGroupWebSessions(UUID.fromString(groupId), "member_banned", Map.of(
+                    "groupId", groupId,
+                    "targetName", targetName,
+                    "bannedBy", session.getPlayerName()
+                ));
+            } else {
+                sendWebResponse(session.getSessionId(), "error", "Failed to ban member");
+            }
+        });
+    }
+
+    private void handleMuteGroupMember(WebSession session, JsonObject data) {
+        String groupId = data.get("groupId").getAsString();
+        String targetName = data.get("targetName").getAsString();
+        long duration = data.has("duration") ? data.get("duration").getAsLong() : 3600000; // 1 hour default
+
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            if (!groupManager.isGroupAdmin(UUID.fromString(groupId), session.getPlayerId())) {
+                sendWebResponse(session.getSessionId(), "error", "You don't have permission to mute members");
+                return;
+            }
+
+            Player target = Bukkit.getPlayerExact(targetName);
+            if (target == null) {
+                sendWebResponse(session.getSessionId(), "error", "Player not found");
+                return;
+            }
+
+            boolean success = groupManager.muteGroupMember(UUID.fromString(groupId), target.getUniqueId(), duration);
+
+            if (success) {
+                sendWebResponse(session.getSessionId(), "member_muted", Map.of(
+                    "groupId", groupId,
+                    "targetName", targetName,
+                    "duration", duration
+                ));
+
+                broadcastToGroupWebSessions(UUID.fromString(groupId), "member_muted", Map.of(
+                    "groupId", groupId,
+                    "targetName", targetName,
+                    "duration", duration,
+                    "mutedBy", session.getPlayerName()
+                ));
+            } else {
+                sendWebResponse(session.getSessionId(), "error", "Failed to mute member");
+            }
+        });
+    }
+
+    private void handleSearchGroups(WebSession session, JsonObject data) {
+        String query = data.get("query").getAsString();
+        int limit = data.has("limit") ? data.get("limit").getAsInt() : 20;
+
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            List<Document> groups = groupManager.searchPublicGroups(query, limit);
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("groups", groups.stream().map(group -> {
+                Map<String, Object> groupData = new HashMap<>();
+                groupData.put("id", group.getString("groupId"));
+                groupData.put("name", group.getString("groupName"));
+                groupData.put("description", group.getString("description"));
+                groupData.put("memberCount", group.getList("members", Document.class).size());
+                groupData.put("maxMembers", group.getInteger("maxMembers"));
+                return groupData;
+            }).toList());
+
+            sendWebResponse(session.getSessionId(), "groups_search_results", response);
+        });
+    }
+
+    private void handleJoinGroupByCode(WebSession session, JsonObject data) {
+        String inviteCode = data.get("inviteCode").getAsString();
+
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            boolean success = groupManager.joinGroupByInviteCode(session.getPlayerId(),
+                session.getPlayerName(), inviteCode);
+
+            if (success) {
+                sendWebResponse(session.getSessionId(), "group_joined", Map.of(
+                    "inviteCode", inviteCode,
+                    "message", "Successfully joined group"
+                ));
+            } else {
+                sendWebResponse(session.getSessionId(), "error", "Invalid invite code or failed to join group");
+            }
+        });
+    }
+
+    private void handleGetGroupMembers(WebSession session, JsonObject data) {
+        String groupId = data.get("groupId").getAsString();
+
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            if (!isPlayerInGroup(session.getPlayerId(), UUID.fromString(groupId))) {
+                sendWebResponse(session.getSessionId(), "error", "You are not a member of this group");
+                return;
+            }
+
+            Document group = groupManager.getGroupById(UUID.fromString(groupId));
+            if (group == null) {
+                sendWebResponse(session.getSessionId(), "error", "Group not found");
+                return;
+            }
+
+            List<Document> members = group.getList("members", Document.class);
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("groupId", groupId);
+            response.put("members", members.stream().map(member -> {
+                String memberName = member.getString("playerName");
+                Player onlineMember = Bukkit.getPlayerExact(memberName);
+
+                Map<String, Object> memberData = new HashMap<>();
+                memberData.put("name", memberName);
+                memberData.put("uuid", member.getString("playerId"));
+                memberData.put("role", member.getString("role"));
+                memberData.put("online", onlineMember != null && onlineMember.isOnline());
+                memberData.put("joinedAt", member.getLong("joinedAt"));
+                return memberData;
+            }).toList());
+
+            sendWebResponse(session.getSessionId(), "group_members", response);
+        });
+    }
+
+    private void handleSendGroupInvite(WebSession session, JsonObject data) {
+        String groupId = data.get("groupId").getAsString();
+        String targetName = data.get("targetName").getAsString();
+
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            if (!groupManager.canInviteToGroup(UUID.fromString(groupId), session.getPlayerId())) {
+                sendWebResponse(session.getSessionId(), "error", "You don't have permission to invite to this group");
+                return;
+            }
+
+            Player target = Bukkit.getPlayerExact(targetName);
+            if (target == null) {
+                sendWebResponse(session.getSessionId(), "error", "Player not found");
+                return;
+            }
+
+            boolean success = groupManager.sendGroupInvite(UUID.fromString(groupId),
+                session.getPlayerId(), session.getPlayerName(), target.getUniqueId(), target.getName());
+
+            if (success) {
+                sendWebResponse(session.getSessionId(), "group_invite_sent", Map.of(
+                    "groupId", groupId,
+                    "targetName", targetName
+                ));
+            } else {
+                sendWebResponse(session.getSessionId(), "error", "Failed to send group invite");
+            }
+        });
+    }
+
+    private void handleCreateGroup(WebSession session, JsonObject data) {
+        String groupName = data.get("groupName").getAsString();
+        String description = data.has("description") ? data.get("description").getAsString() : "";
+        int maxMembers = data.has("maxMembers") ? data.get("maxMembers").getAsInt() : 20;
+        boolean isPublic = data.has("isPublic") ? data.get("isPublic").getAsBoolean() : false;
+
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            UUID groupId = groupManager.createGroup(session.getPlayerId(), session.getPlayerName(),
+                groupName, description, maxMembers, isPublic);
+
+            if (groupId != null) {
+                sendWebResponse(session.getSessionId(), "group_created", Map.of(
+                    "groupId", groupId.toString(),
+                    "groupName", groupName,
+                    "description", description,
+                    "maxMembers", maxMembers,
+                    "isPublic", isPublic
+                ));
+            } else {
+                sendWebResponse(session.getSessionId(), "error", "Failed to create group");
+            }
+        });
+    }
+
+    private void handleLeaveGroup(WebSession session, JsonObject data) {
+        String groupId = data.get("groupId").getAsString();
+
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            boolean success = groupManager.removePlayerFromGroup(UUID.fromString(groupId), session.getPlayerId());
+
+            if (success) {
+                sendWebResponse(session.getSessionId(), "group_left", Map.of(
+                    "groupId", groupId
+                ));
+
+                // Notify remaining group members
+                broadcastToGroupWebSessions(UUID.fromString(groupId), "member_left", Map.of(
+                    "groupId", groupId,
+                    "playerName", session.getPlayerName()
+                ));
+            } else {
+                sendWebResponse(session.getSessionId(), "error", "Failed to leave group");
+            }
+        });
+    }
+
+    private void handleGetGroupInviteCode(WebSession session, JsonObject data) {
+        String groupId = data.get("groupId").getAsString();
+
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            if (!groupManager.isGroupAdmin(UUID.fromString(groupId), session.getPlayerId())) {
+                sendWebResponse(session.getSessionId(), "error", "You don't have permission to get invite codes");
+                return;
+            }
+
+            String inviteCode = groupManager.generateGroupInviteCode(UUID.fromString(groupId));
+
+            if (inviteCode != null) {
+                sendWebResponse(session.getSessionId(), "group_invite_code", Map.of(
+                    "groupId", groupId,
+                    "inviteCode", inviteCode
+                ));
+            } else {
+                sendWebResponse(session.getSessionId(), "error", "Failed to generate invite code");
+            }
+        });
+    }
+
     public boolean authenticateSession(String sessionId, String username, String password) {
         if (!userDataManager.verifyWebPassword(username, password)) {
             return false;
@@ -467,7 +864,7 @@ public class WebAPIHandler {
     }
 
     private boolean isPlayerInGroup(UUID playerId, UUID groupId) {
-        List<Document> playerGroups = groupManager.getPlayerGroups(playerId);
+        List<Document> playerGroups = groupManager.getPlayerGroupsAsDocuments(playerId);
         return playerGroups.stream()
                 .anyMatch(group -> group.getString("groupId").equals(groupId.toString()));
     }
@@ -518,7 +915,7 @@ public class WebAPIHandler {
         return MinechatWebSocketHandler.getActiveSessionIds().size();
     }
 
-// Represents a web session for a player
+    // Represents a web session for a player
     private static class WebSession {
         private final String sessionId;
         private final UUID playerId;
@@ -542,7 +939,7 @@ public class WebAPIHandler {
         public void addResponse(Map<String, Object> response) {
             synchronized (responseQueue) {
                 responseQueue.add(response);
-                // Keep only last 100 responses to prevent memory leaks
+                // keep only last 100 responses to prevent memory leaks
                 if (responseQueue.size() > 100) {
                     responseQueue.remove(0);
                 }

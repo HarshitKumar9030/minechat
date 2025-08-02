@@ -33,6 +33,9 @@ public final class Minechat extends JavaPlugin {
     private FriendCommandHandler friendCommandHandler;
     private GroupCommandHandler groupCommandHandler;
 
+    private me.harshit.minechat.web.WebAPIHandler webAPIHandler;
+    private me.harshit.minechat.web.MinechatWebSocketServer webSocketServer;
+
     @Override
     public void onEnable() {
         getLogger().info("Starting MineChat...");
@@ -40,10 +43,8 @@ public final class Minechat extends JavaPlugin {
         // Save default config if it doesn't exist
         saveDefaultConfig();
 
-        // Initialize rank manager early (needs to be before other components)
         rankManager = new RankManager(this);
 
-        // Initialize db manager
         databaseManager = new DatabaseManager(this);
 
         if (databaseManager.connect()) {
@@ -57,10 +58,17 @@ public final class Minechat extends JavaPlugin {
 
             friendAPI = new FriendAPIImpl(friendManager, this);
 
-            // Initialize embedded web server
+            webAPIHandler = new me.harshit.minechat.web.WebAPIHandler(this, userDataManager, friendManager, groupManager);
+
             if (getConfig().getBoolean("web.enable-api", true)) {
                 webServer = new EmbeddedWebServer(this, userDataManager, friendManager, groupManager);
                 webServer.start();
+            }
+
+            if (getConfig().getBoolean("web.enable-websocket", true)) {
+                int wsPort = getConfig().getInt("web.websocket-port", 8081);
+                webSocketServer = new me.harshit.minechat.web.MinechatWebSocketServer(this, webAPIHandler, wsPort);
+                webSocketServer.start();
             }
         } else {
             getLogger().severe("✗ Failed to connect to database! Check your config.yml");
@@ -105,6 +113,14 @@ public final class Minechat extends JavaPlugin {
 
         if (webServer != null) {
             webServer.stop();
+        }
+
+        if (webSocketServer != null) {
+            webSocketServer.stop();
+        }
+
+        if (webAPIHandler != null) {
+            webAPIHandler.shutdown();
         }
 
         // Disconnect from database
@@ -162,8 +178,23 @@ public final class Minechat extends JavaPlugin {
         return userDataManager;
     }
 
-    // gets the rank manager instance
     public RankManager getRankManager() {
         return rankManager;
+    }
+
+    public GroupManager getGroupManager() {
+        return groupManager;
+    }
+
+    public FriendManager getFriendManager() {
+        return friendManager;
+    }
+
+    public me.harshit.minechat.web.WebAPIHandler getWebAPIHandler() {
+        return webAPIHandler;
+    }
+
+    public me.harshit.minechat.web.MinechatWebSocketServer getWebSocketServer() {
+        return webSocketServer;
     }
 }

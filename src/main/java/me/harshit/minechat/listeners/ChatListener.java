@@ -129,5 +129,23 @@ public class ChatListener implements Listener {
                 }
             });
         }
+
+        // broadcast to WebSocket clients for real-time web chat
+        if (plugin.getWebAPIHandler() != null) {
+            String finalFilteredMessage = filteredMessage;
+            plugin.getServer().getScheduler().runTaskAsynchronously(plugin, () -> {
+                try {
+                    plugin.getWebAPIHandler().broadcastMinecraftMessage(
+                        player.getUniqueId(),
+                        player.getName(),
+                        finalFilteredMessage,
+                        "global_chat",
+                        null
+                    );
+                } catch (Exception e) {
+                    plugin.getLogger().warning("Failed to broadcast message to web clients: " + e.getMessage());
+                }
+            });
+        }
     }
 }

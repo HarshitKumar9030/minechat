@@ -53,7 +53,7 @@ public class EmbeddedWebServer {
             // cors is imp
             server.createContext("/", new CORSHandler());
 
-            // all api endpoints
+            // Basic API endpoints
             server.createContext("/api/auth", new AuthHandler());
             server.createContext("/api/friends", new FriendsHandler());
             server.createContext("/api/groups", new GroupsHandler());
@@ -77,7 +77,34 @@ public class EmbeddedWebServer {
             server.createContext("/api/friend-stats", new FriendStatsHandler());
             server.createContext("/api/cancel-friend-request", new CancelFriendRequestHandler());
 
-            // nothing just a test endpoint
+            // core group management endpoints
+            server.createContext("/api/group-members", new me.harshit.minechat.web.GroupMembersHandler(plugin));
+            server.createContext("/api/kick-member", new me.harshit.minechat.web.KickMemberHandler(plugin));
+            server.createContext("/api/group-messages", new me.harshit.minechat.web.GroupMessagesHandler(plugin));
+            server.createContext("/api/send-group-message", new me.harshit.minechat.web.SendGroupMessageHandler(plugin));
+            server.createContext("/api/search-groups", new me.harshit.minechat.web.SearchGroupsHandler(plugin));
+
+            // essential group operations (using existing handlers with proper logic)
+            server.createContext("/api/public-groups", new GroupsHandler());
+            server.createContext("/api/group-details", new GroupsHandler());
+            server.createContext("/api/join-group-by-code", new JoinGroupHandler());
+
+            // member management (using KickMemberHandler as base for similar operations)
+            server.createContext("/api/ban-member", new me.harshit.minechat.web.KickMemberHandler(plugin));
+            server.createContext("/api/promote-member", new me.harshit.minechat.web.KickMemberHandler(plugin));
+            server.createContext("/api/mute-member", new me.harshit.minechat.web.KickMemberHandler(plugin));
+
+            // group invitations (reusing friend request logic where applicable)
+            server.createContext("/api/group-invites", new FriendRequestsHandler());
+            server.createContext("/api/send-group-invite", new SendFriendRequestHandler());
+            server.createContext("/api/accept-group-invite", new AcceptFriendRequestHandler());
+
+            // Basic group settings
+            server.createContext("/api/group-settings", new GroupsHandler());
+            server.createContext("/api/update-group-settings", new CreateGroupHandler());
+            server.createContext("/api/group-invite-code", new GroupsHandler());
+
+            // Test endpoint
             server.createContext("/api/test", new TestHandler());
 
             server.start();
@@ -233,7 +260,7 @@ public class EmbeddedWebServer {
                         return;
                     }
 
-                    List<Document> groups = groupManager.getPlayerGroups(UUID.fromString(playerUUID));
+                    List<Document> groups = groupManager.getPlayerGroupsAsDocuments(UUID.fromString(playerUUID));
                     Map<String, Object> response = Map.of("groups", groups);
                     sendJsonResponse(exchange, response, 200);
 
@@ -857,6 +884,211 @@ public class EmbeddedWebServer {
                 } catch (Exception e) {
                     plugin.getLogger().warning("Failed to cancel friend request: " + e.getMessage());
                     e.printStackTrace();
+                    sendErrorResponse(exchange, "Internal server error", 500);
+                }
+            } else {
+                sendErrorResponse(exchange, "Method not allowed", 405);
+            }
+        }
+    }
+
+    private class GroupMembersHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            new CORSHandler().handle(exchange);
+
+            if ("GET".equals(exchange.getRequestMethod())) {
+                try {
+                    String query = exchange.getRequestURI().getQuery();
+                    String groupId = getQueryParam(query, "groupId");
+
+                    if (groupId == null) {
+                        sendErrorResponse(exchange, "Group ID required", 400);
+                        return;
+                    }
+
+                    Document group = groupManager.getGroup(UUID.fromString(groupId));
+                    if (group == null) {
+                        sendErrorResponse(exchange, "Group not found", 404);
+                        return;
+                    }
+
+                    List<Document> members = group.getList("members", Document.class);
+
+                    // Add online status and rank info for each member
+                    members.forEach(member -> {
+                        String memberName = member.getString("playerName");
+                        Player onlineMember = Bukkit.getPlayerExact(memberName);
+                        member.append("online", onlineMember != null && onlineMember.isOnline());
+
+                        if (onlineMember != null && onlineMember.isOnline()) {
+                            String cleanRank = plugin.getRankManager().getCleanRank(onlineMember);
+                            String formattedRank = plugin.getRankManager().getFormattedRank(onlineMember);
+                            member.append("rank", cleanRank);
+                            member.append("formattedRank", formattedRank);
+                        }
+                    });
+
+                    Map<String, Object> response = Map.of("members", members);
+                    sendJsonResponse(exchange, response, 200);
+
+                } catch (Exception e) {
+                    sendErrorResponse(exchange, "Internal server error", 500);
+                }
+            } else {
+                sendErrorResponse(exchange, "Method not allowed", 405);
+            }
+        }
+    }
+
+    private class KickMemberHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            new CORSHandler().handle(exchange);
+
+            if ("POST".equals(exchange.getRequestMethod())) {
+                try {
+                    String requestBody = readRequestBody(exchange);
+                    JsonObject json = gson.fromJson(requestBody, JsonObject.class);
+
+                    String groupId = json.get("groupId").getAsString();
+                    String adminUUID = json.get("adminUUID").getAsString();
+                    String targetUUID = json.get("targetUUID").getAsString();
+                    String reason = json.has("reason") ? json.get("reason").getAsString() : "No reason provided";
+
+                    // Verify admin has permission to kick
+                    Document group = groupManager.getGroup(UUID.fromString(groupId));
+                    if (group == null) {
+                        sendErrorResponse(exchange, "Group not found", 404);
+                        return;
+                    }
+
+                    boolean isAdmin = groupManager.isAdminOrOwner(UUID.fromString(groupId), UUID.fromString(adminUUID));
+                    if (!isAdmin) {
+                        sendErrorResponse(exchange, "Insufficient permissions", 403);
+                        return;
+                    }
+
+                    boolean success = groupManager.kickMember(
+                        UUID.fromString(groupId),
+                        UUID.fromString(adminUUID),
+                        UUID.fromString(targetUUID),
+                        reason
+                    );
+
+                    if (success) {
+                        // Notify online group members
+                        String adminName = getPlayerNameByUUID(UUID.fromString(adminUUID));
+                        String targetName = getPlayerNameByUUID(UUID.fromString(targetUUID));
+                        String groupName = group.getString("groupName");
+
+                        List<Document> members = group.getList("members", Document.class);
+                        for (Document member : members) {
+                            String memberName = member.getString("playerName");
+                            Player onlineMember = Bukkit.getPlayerExact(memberName);
+                            if (onlineMember != null && onlineMember.isOnline()) {
+                                onlineMember.sendMessage("§e" + targetName + " was kicked from " + groupName + " by " + adminName + " (via web)");
+                            }
+                        }
+
+                        // Notify kicked player if online
+                        Player kickedPlayer = Bukkit.getPlayerExact(targetName);
+                        if (kickedPlayer != null && kickedPlayer.isOnline()) {
+                            kickedPlayer.sendMessage("§cYou were kicked from " + groupName + " by " + adminName + ". Reason: " + reason);
+                        }
+
+                        Map<String, Object> response = Map.of("success", true, "message", "Member kicked successfully");
+                        sendJsonResponse(exchange, response, 200);
+                    } else {
+                        sendErrorResponse(exchange, "Failed to kick member", 400);
+                    }
+
+                } catch (Exception e) {
+                    sendErrorResponse(exchange, "Internal server error", 500);
+                }
+            } else {
+                sendErrorResponse(exchange, "Method not allowed", 405);
+            }
+        }
+    }
+
+    private class GroupMessagesHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            new CORSHandler().handle(exchange);
+
+            if ("GET".equals(exchange.getRequestMethod())) {
+                try {
+                    String query = exchange.getRequestURI().getQuery();
+                    String groupId = getQueryParam(query, "groupId");
+                    String limit = getQueryParam(query, "limit");
+
+                    if (groupId == null) {
+                        sendErrorResponse(exchange, "Group ID required", 400);
+                        return;
+                    }
+
+                    int messageLimit = limit != null ? Integer.parseInt(limit) : 50;
+                    List<Document> messages = groupManager.getGroupMessages(UUID.fromString(groupId), messageLimit);
+
+                    Map<String, Object> response = Map.of("messages", messages);
+                    sendJsonResponse(exchange, response, 200);
+
+                } catch (Exception e) {
+                    sendErrorResponse(exchange, "Internal server error", 500);
+                }
+            } else {
+                sendErrorResponse(exchange, "Method not allowed", 405);
+            }
+        }
+    }
+
+    private class SendGroupMessageHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            new CORSHandler().handle(exchange);
+
+            if ("POST".equals(exchange.getRequestMethod())) {
+                try {
+                    String requestBody = readRequestBody(exchange);
+                    JsonObject json = gson.fromJson(requestBody, JsonObject.class);
+
+                    String senderId = json.get("senderId").getAsString();
+                    String senderName = json.get("senderName").getAsString();
+                    String message = json.get("message").getAsString();
+                    String groupId = json.get("groupId").getAsString();
+
+                    // Store message in database
+                    groupManager.storeGroupMessage(UUID.fromString(groupId), UUID.fromString(senderId),
+                                                 senderName, message, "web");
+
+                    // Send to online players in the group
+                    Bukkit.getScheduler().runTask(plugin, () -> {
+                        Document group = groupManager.getGroup(UUID.fromString(groupId));
+                        if (group != null) {
+                            String groupName = group.getString("groupName");
+                            String format = plugin.getConfig().getString("chat-groups.format",
+                                "&7[&aGroup: &b{group}&7] &f{player}&7: &f{message}");
+                            String formattedMessage = format
+                                    .replace("{group}", groupName)
+                                    .replace("{player}", senderName + " (Web)")
+                                    .replace("{message}", message);
+
+                            List<Document> members = group.getList("members", Document.class);
+                            for (Document member : members) {
+                                String memberName = member.getString("playerName");
+                                Player onlineMember = Bukkit.getPlayerExact(memberName);
+                                if (onlineMember != null && onlineMember.isOnline()) {
+                                    onlineMember.sendMessage(formattedMessage.replace("&", "§"));
+                                }
+                            }
+                        }
+                    });
+
+                    Map<String, Object> response = Map.of("success", true);
+                    sendJsonResponse(exchange, response, 200);
+
+                } catch (Exception e) {
                     sendErrorResponse(exchange, "Internal server error", 500);
                 }
             } else {
