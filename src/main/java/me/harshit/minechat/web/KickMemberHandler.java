@@ -77,38 +77,28 @@ public class KickMemberHandler implements HttpHandler {
             UUID adminId = UUID.fromString(adminUUID);
             UUID targetId = UUID.fromString(targetUUID);
 
-            Document groupDoc = groupManager.getGroupById(groupUUID);
-            if (groupDoc == null) {
+            Document group = groupManager.getGroup(groupUUID);
+
+            if (group == null) {
                 sendErrorResponse(exchange, 404, "Group not found");
                 return;
             }
 
-            GroupInfo group = GroupInfo.fromDocument(groupDoc);
-            if (group == null) {
-                sendErrorResponse(exchange, 500, "Failed to parse group data");
-                return;
-            }
-
-            // verify admin has permission to kick
-            GroupMember adminMember = groupManager.getGroupMember(groupUUID, adminId);
-            if (adminMember == null || !adminMember.getRole().canModerate()) {
+            boolean isAdmin = groupManager.isAdminOrOwner(groupUUID, adminId);
+            if (!isAdmin) {
                 sendErrorResponse(exchange, 403, "Insufficient permissions to kick members");
                 return;
             }
 
-            GroupMember targetMember = groupManager.getGroupMember(groupUUID, targetId);
-            if (targetMember == null) {
+            List<Document> members = group.getList("members", Document.class);
+            boolean targetIsMember = members.stream()
+                .anyMatch(member -> member.getString("playerId").equals(targetId.toString()));
+
+            if (!targetIsMember) {
                 sendErrorResponse(exchange, 404, "Target player is not a member of this group");
                 return;
             }
 
-            // check if admin can kick this member (can't kick higher or equal rank)
-            if (targetMember.getRole().getPriority() >= adminMember.getRole().getPriority()) {
-                sendErrorResponse(exchange, 403, "Cannot kick someone with equal or higher permissions");
-                return;
-            }
-
-            // perform the kick
             boolean success = groupManager.kickMember(groupUUID, targetId, adminId, reason);
 
             if (success) {
@@ -116,13 +106,21 @@ public class KickMemberHandler implements HttpHandler {
                 Bukkit.getScheduler().runTask(plugin, () -> {
                     String adminName = getPlayerNameByUUID(adminId);
                     String targetName = getPlayerNameByUUID(targetId);
-                    String groupName = group.getGroupName();
+                    String groupName = group.getString("groupName");
 
-                    List<GroupMember> members = group.getMembers();
-                    for (GroupMember member : members) {
-                        Player onlineMember = Bukkit.getPlayer(member.getPlayerId());
-                        if (onlineMember != null && onlineMember.isOnline()) {
-                            onlineMember.sendMessage("§e" + targetName + " was kicked from " + groupName + " by " + adminName + " (via web)");
+                    List<Document> updatedMembers = group.getList("members", Document.class);
+                    for (Document member : updatedMembers) {
+                        String memberIdStr = member.getString("playerId");
+                        if (memberIdStr != null) {
+                            try {
+                                UUID memberId = UUID.fromString(memberIdStr);
+                                Player onlineMember = Bukkit.getPlayer(memberId);
+                                if (onlineMember != null && onlineMember.isOnline()) {
+                                    onlineMember.sendMessage("§e" + targetName + " was kicked from " + groupName + " by " + adminName + " (via web)");
+                                }
+                            } catch (IllegalArgumentException e) {
+                                // Skip invalid UUIDs
+                            }
                         }
                     }
 
@@ -145,7 +143,7 @@ public class KickMemberHandler implements HttpHandler {
             }
 
         } catch (Exception e) {
-            plugin.getLogger().severe("Error handling kick member request: " + e.getMessage());
+            plugin.getLogger().severe("Error kicking member: " + e.getMessage());
             e.printStackTrace();
             sendErrorResponse(exchange, 500, "Internal server error");
         }

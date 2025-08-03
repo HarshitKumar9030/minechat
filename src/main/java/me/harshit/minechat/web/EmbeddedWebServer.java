@@ -4,6 +4,7 @@ import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
 import me.harshit.minechat.Minechat;
+import me.harshit.minechat.api.GroupInfo;
 import me.harshit.minechat.database.FriendManager;
 import me.harshit.minechat.database.GroupManager;
 import me.harshit.minechat.database.UserDataManager;
@@ -64,6 +65,7 @@ public class EmbeddedWebServer {
             server.createContext("/api/reject-friend-request", new RejectFriendRequestHandler());
             server.createContext("/api/remove-friend", new RemoveFriendHandler());
             server.createContext("/api/create-group", new CreateGroupHandler());
+            server.createContext("/api/delete-group", new DeleteGroupHandler());
             server.createContext("/api/join-group", new JoinGroupHandler());
             server.createContext("/api/leave-group", new LeaveGroupHandler());
             server.createContext("/api/ranks", new RanksHandler());
@@ -86,6 +88,8 @@ public class EmbeddedWebServer {
 
             // essential group operations (using existing handlers with proper logic)
             server.createContext("/api/public-groups", new GroupsHandler());
+            server.createContext("/api/trending-groups", new GroupsHandler());
+            server.createContext("/api/recommended-groups", new GroupsHandler());
             server.createContext("/api/group-details", new GroupsHandler());
             server.createContext("/api/join-group-by-code", new JoinGroupHandler());
 
@@ -99,10 +103,11 @@ public class EmbeddedWebServer {
             server.createContext("/api/send-group-invite", new SendFriendRequestHandler());
             server.createContext("/api/accept-group-invite", new AcceptFriendRequestHandler());
 
-            // Basic group settings
             server.createContext("/api/group-settings", new GroupsHandler());
+            server.createContext("/api/update-group", new UpdateGroupHandler());
             server.createContext("/api/update-group-settings", new CreateGroupHandler());
             server.createContext("/api/group-invite-code", new GroupsHandler());
+            server.createContext("/api/group-stats", new GroupStatsHandler());
 
             // Test endpoint
             server.createContext("/api/test", new TestHandler());
@@ -252,23 +257,125 @@ public class EmbeddedWebServer {
 
             if ("GET".equals(exchange.getRequestMethod())) {
                 try {
+                    String path = exchange.getRequestURI().getPath();
                     String query = exchange.getRequestURI().getQuery();
-                    String playerUUID = getQueryParam(query, "playerUUID");
 
-                    if (playerUUID == null) {
-                        sendErrorResponse(exchange, "Player UUID required", 400);
-                        return;
+                    if (path.endsWith("/public-groups")) {
+                        handlePublicGroups(exchange);
+                    } else if (path.endsWith("/trending-groups")) {
+                        handleTrendingGroups(exchange);
+                    } else if (path.endsWith("/recommended-groups")) {
+                        handleRecommendedGroups(exchange, query);
+                    } else {
+                        String playerUUID = getQueryParam(query, "playerUUID");
+                        if (playerUUID == null) {
+                            sendErrorResponse(exchange, "Player UUID required", 400);
+                            return;
+                        }
+                        UUID playerId = UUID.fromString(playerUUID);
+                        List<Document> groups = groupManager.getPlayerGroupsAsDocuments(playerId);
+                        
+                        for (Document group : groups) {
+                            List<Document> members = group.getList("members", Document.class);
+                            String userRole = members.stream()
+                                .filter(member -> member.getString("playerId").equals(playerId.toString()))
+                                .map(member -> member.getString("role"))
+                                .findFirst()
+                                .orElse("MEMBER");
+                            group.append("role", userRole);
+                            
+                            Document settings = group.get("settings", Document.class);
+                            if (settings != null) {
+                                String motd = settings.getString("groupMotd");
+                                if (motd != null && !motd.isEmpty()) {
+                                    group.append("motd", motd);
+                                }
+                                
+                                List<String> announcements = settings.getList("announcements", String.class);
+                                if (announcements != null && !announcements.isEmpty()) {
+                                    group.append("announcements", announcements);
+                                }
+                            }
+                            
+                            if (!group.containsKey("motd") && group.getInteger("memberCount", 0) == 0) {
+                                group.append("motd", "Welcome to " + group.getString("groupName") + "! Start chatting to get the conversation going.");
+                            }
+                            if (!group.containsKey("announcements") && group.getInteger("memberCount", 0) == 0) {
+                                group.append("announcements", List.of(
+                                    "📋 Group rules: Be respectful and have fun!",
+                                    "🎉 New group created - say hello to everyone!"
+                                ));
+                            }
+                        }
+
+                        Map<String, Object> response = Map.of("groups", groups);
+                        sendJsonResponse(exchange, response, 200);
                     }
-
-                    List<Document> groups = groupManager.getPlayerGroupsAsDocuments(UUID.fromString(playerUUID));
-                    Map<String, Object> response = Map.of("groups", groups);
-                    sendJsonResponse(exchange, response, 200);
-
                 } catch (Exception e) {
                     sendErrorResponse(exchange, "Internal server error", 500);
                 }
             } else {
                 sendErrorResponse(exchange, "Method not allowed", 405);
+            }
+        }
+
+        private void handlePublicGroups(HttpExchange exchange) throws IOException {
+            try {
+                List<Document> publicGroups = groupManager.getAllPublicGroups();
+                for (Document group : publicGroups) {
+                    Document settings = group.get("settings", Document.class);
+                    if (settings != null) {
+                        String motd = settings.getString("groupMotd");
+                        if (motd != null && !motd.isEmpty()) {
+                            group.append("motd", motd);
+                        }
+                        
+                        List<String> announcements = settings.getList("announcements", String.class);
+                        if (announcements != null && !announcements.isEmpty()) {
+                            group.append("announcements", announcements);
+                        }
+                    }
+                    
+                    if (!group.containsKey("motd") && group.getInteger("memberCount", 0) <= 1) {
+                        group.append("motd", "Join " + group.getString("groupName") + " and be part of our growing community!");
+                    }
+                    if (!group.containsKey("announcements") && group.getInteger("memberCount", 0) <= 1) {
+                        group.append("announcements", List.of(
+                            "🌟 New members always welcome!",
+                            "💬 Active community - join the conversation!"
+                        ));
+                    }
+                }
+                Map<String, Object> response = Map.of("groups", publicGroups);
+                sendJsonResponse(exchange, response, 200);
+            } catch (Exception e) {
+                sendErrorResponse(exchange, "Failed to load public groups", 500);
+            }
+        }
+
+        private void handleTrendingGroups(HttpExchange exchange) throws IOException {
+            try {
+                // For now, return the most active public groups,  todo: implement trending logic
+                List<Document> trendingGroups = groupManager.getTrendingGroups();
+                Map<String, Object> response = Map.of("groups", trendingGroups);
+                sendJsonResponse(exchange, response, 200);
+            } catch (Exception e) {
+                sendErrorResponse(exchange, "Failed to load trending groups", 500);
+            }
+        }
+
+        private void handleRecommendedGroups(HttpExchange exchange, String query) throws IOException {
+            try {
+                String playerUUID = getQueryParam(query, "playerUUID");
+                if (playerUUID == null) {
+                    sendErrorResponse(exchange, "Player UUID required", 400);
+                    return;
+                }
+                List<Document> recommendedGroups = groupManager.getRecommendedGroups(UUID.fromString(playerUUID));
+                Map<String, Object> response = Map.of("groups", recommendedGroups);
+                sendJsonResponse(exchange, response, 200);
+            } catch (Exception e) {
+                sendErrorResponse(exchange, "Failed to load recommended groups", 500);
             }
         }
     }
@@ -581,16 +688,18 @@ public class EmbeddedWebServer {
                     String creatorName = json.get("creatorName").getAsString();
                     String groupName = json.get("groupName").getAsString();
                     String description = json.has("description") ? json.get("description").getAsString() : "";
+                    int maxMembers = json.has("maxMembers") ? json.get("maxMembers").getAsInt() : 20;
                     boolean isPrivate = json.has("isPrivate") ? json.get("isPrivate").getAsBoolean() : false;
 
-                    boolean success = groupManager.createGroup(
-                        UUID.fromString(creatorUUID), creatorName, groupName, description, isPrivate
+                    GroupInfo createdGroup = groupManager.createGroup(
+                        UUID.fromString(creatorUUID), creatorName, groupName, description, maxMembers, isPrivate
                     );
 
-                    if (success) {
+                    if (createdGroup != null) {
                         Map<String, Object> response = Map.of(
                             "success", true,
-                            "message", "Group created successfully"
+                            "message", "Group created successfully",
+                            "groupId", createdGroup.getGroupId().toString()
                         );
                         sendJsonResponse(exchange, response, 200);
                     } else {
@@ -673,6 +782,63 @@ public class EmbeddedWebServer {
 
                     Map<String, Object> response = Map.of("success", success);
                     sendJsonResponse(exchange, response, success ? 200 : 400);
+
+                } catch (Exception e) {
+                    sendErrorResponse(exchange, "Internal server error", 500);
+                }
+            } else {
+                sendErrorResponse(exchange, "Method not allowed", 405);
+            }
+        }
+    }
+
+    private class DeleteGroupHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            new CORSHandler().handle(exchange);
+
+            if ("POST".equals(exchange.getRequestMethod())) {
+                try {
+                    String requestBody = readRequestBody(exchange);
+                    JsonObject json = gson.fromJson(requestBody, JsonObject.class);
+
+                    String groupId = json.get("groupId").getAsString();
+                    String ownerUUID = json.get("ownerUUID").getAsString();
+
+                    // verify that the user is the owner of the group
+                    Document group = groupManager.getGroup(UUID.fromString(groupId));
+                    if (group == null) {
+                        sendErrorResponse(exchange, "Group not found", 404);
+                        return;
+                    }
+
+                    String ownerId = group.getString("ownerId");
+                    if (!ownerUUID.equals(ownerId)) {
+                        sendErrorResponse(exchange, "Only the group owner can delete the group", 403);
+                        return;
+                    }
+
+                    boolean success = groupManager.deleteGroup(UUID.fromString(groupId), UUID.fromString(ownerUUID));
+
+                    if (success) {
+                        // notify
+                        List<Document> members = group.getList("members", Document.class);
+                        String groupName = group.getString("groupName");
+                        String ownerName = getPlayerNameByUUID(UUID.fromString(ownerUUID));
+                        
+                        for (Document member : members) {
+                            String memberName = member.getString("playerName");
+                            Player onlineMember = Bukkit.getPlayerExact(memberName);
+                            if (onlineMember != null && onlineMember.isOnline() && !memberName.equals(ownerName)) {
+                                onlineMember.sendMessage("§cThe group '" + groupName + "' has been deleted by " + ownerName);
+                            }
+                        }
+
+                        Map<String, Object> response = Map.of("success", true, "message", "Group deleted successfully");
+                        sendJsonResponse(exchange, response, 200);
+                    } else {
+                        sendErrorResponse(exchange, "Failed to delete group", 400);
+                    }
 
                 } catch (Exception e) {
                     sendErrorResponse(exchange, "Internal server error", 500);
@@ -1097,6 +1263,176 @@ public class EmbeddedWebServer {
         }
     }
 
+    private class GroupStatsHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            new CORSHandler().handle(exchange);
+
+            if ("GET".equals(exchange.getRequestMethod())) {
+                try {
+                    String query = exchange.getRequestURI().getQuery();
+                    String groupId = getQueryParam(query, "groupId");
+
+                    if (groupId == null) {
+                        sendErrorResponse(exchange, "Group ID required", 400);
+                        return;
+                    }
+
+                    UUID groupUUID = UUID.fromString(groupId);
+                    Document group = groupManager.getGroup(groupUUID);
+
+                    if (group == null) {
+                        sendErrorResponse(exchange, "Group not found", 404);
+                        return;
+                    }
+
+                    List<Document> members = group.getList("members", Document.class);
+                    List<Document> messages = groupManager.getGroupMessages(groupUUID, 1000); // Get last 1000 messages for stats
+
+                    int totalMembers = members.size();
+                    int onlineMembers = 0;
+                    int admins = 0;
+                    int moderators = 0;
+
+                    for (Document member : members) {
+                        String memberName = member.getString("playerName");
+                        String role = member.getString("role");
+
+                        Player onlinePlayer = Bukkit.getPlayerExact(memberName);
+                        if (onlinePlayer != null && onlinePlayer.isOnline()) {
+                            onlineMembers++;
+                        }
+
+                        if ("ADMIN".equalsIgnoreCase(role) || "OWNER".equalsIgnoreCase(role)) {
+                            admins++;
+                        } else if ("MODERATOR".equalsIgnoreCase(role)) {
+                            moderators++;
+                        }
+                    }
+
+                    int totalMessages = messages.size();
+                    long todayMessages = messages.stream()
+                        .mapToLong(msg -> {
+                            try {
+                                Object timestamp = msg.get("timestamp");
+                                if (timestamp instanceof String) {
+                                    return Long.parseLong((String) timestamp);
+                                } else if (timestamp instanceof Long) {
+                                    return (Long) timestamp;
+                                } else if (timestamp instanceof Number) {
+                                    return ((Number) timestamp).longValue();
+                                }
+                                return 0L; // default fallback
+                            } catch (Exception e) {
+                                return 0L; // return 0 for invalid timestamps
+                            }
+                        })
+                        .filter(timestamp -> {
+                            long oneDayAgo = System.currentTimeMillis() - (24 * 60 * 60 * 1000);
+                            return timestamp > oneDayAgo;
+                        })
+                        .count();
+
+                    long weekMessages = messages.stream()
+                        .mapToLong(msg -> {
+                            try {
+                                // handle both string and long timestamp formats
+                                Object timestamp = msg.get("timestamp");
+                                if (timestamp instanceof String) {
+                                    return Long.parseLong((String) timestamp);
+                                } else if (timestamp instanceof Long) {
+                                    return (Long) timestamp;
+                                } else if (timestamp instanceof Number) {
+                                    return ((Number) timestamp).longValue();
+                                }
+                                return 0L; // default fallback
+                            } catch (Exception e) {
+                                return 0L; // return 0 for invalid timestamps
+                            }
+                        })
+                        .filter(timestamp -> {
+                            long oneWeekAgo = System.currentTimeMillis() - (7 * 24 * 60 * 60 * 1000);
+                            return timestamp > oneWeekAgo;
+                        })
+                        .count();
+
+                    Map<String, Long> memberMessageCounts = new HashMap<>();
+                    for (Document message : messages) {
+                        String sender = message.getString("senderName");
+                        memberMessageCounts.put(sender, memberMessageCounts.getOrDefault(sender, 0L) + 1);
+                    }
+
+                    String mostActiveMember = memberMessageCounts.entrySet().stream()
+                        .max(Map.Entry.comparingByValue())
+                        .map(Map.Entry::getKey)
+                        .orElse("N/A");
+
+                    long mostActiveCount = memberMessageCounts.getOrDefault(mostActiveMember, 0L);
+
+                    long groupAge = System.currentTimeMillis() - group.getLong("createdDate");
+                    double daysSinceCreation = Math.max(1, groupAge / (24.0 * 60 * 60 * 1000));
+                    double activityScore = totalMessages / daysSinceCreation;
+
+                    Map<String, Object> stats = new HashMap<>();
+                    stats.put("groupId", groupId);
+                    stats.put("groupName", group.getString("groupName"));
+                    stats.put("description", group.getString("description"));
+                    stats.put("createdDate", group.getLong("createdDate"));
+                    stats.put("isPrivate", group.getBoolean("isPrivate", false));
+                    stats.put("maxMembers", group.getInteger("maxMembers", 25));
+
+                    Map<String, Object> memberStats = new HashMap<>();
+                    memberStats.put("total", totalMembers);
+                    memberStats.put("online", onlineMembers);
+                    memberStats.put("offline", totalMembers - onlineMembers);
+                    memberStats.put("admins", admins);
+                    memberStats.put("moderators", moderators);
+                    memberStats.put("members", totalMembers - admins - moderators);
+                    stats.put("memberStats", memberStats);
+
+                    Map<String, Object> messageStats = new HashMap<>();
+                    messageStats.put("total", totalMessages);
+                    messageStats.put("today", todayMessages);
+                    messageStats.put("thisWeek", weekMessages);
+                    messageStats.put("averagePerDay", Math.round(activityScore * 100.0) / 100.0);
+                    stats.put("messageStats", messageStats);
+
+                    Map<String, Object> activityStats = new HashMap<>();
+                    activityStats.put("mostActiveMember", mostActiveMember);
+                    activityStats.put("mostActiveMessageCount", mostActiveCount);
+                    activityStats.put("activityScore", Math.round(activityScore * 100.0) / 100.0);
+                    activityStats.put("daysSinceCreation", Math.round(daysSinceCreation * 100.0) / 100.0);
+                    stats.put("activityStats", activityStats);
+
+                    Map<String, Object> ownerInfo = new HashMap<>();
+                    ownerInfo.put("name", group.getString("ownerName"));
+                    ownerInfo.put("uuid", group.getString("ownerId"));
+
+                    Player ownerPlayer = Bukkit.getPlayerExact(group.getString("ownerName"));
+                    ownerInfo.put("online", ownerPlayer != null && ownerPlayer.isOnline());
+
+                    if (ownerPlayer != null && ownerPlayer.isOnline()) {
+                        ownerInfo.put("rank", plugin.getRankManager().getCleanRank(ownerPlayer));
+                        ownerInfo.put("formattedRank", plugin.getRankManager().getFormattedRank(ownerPlayer));
+                    }
+                    stats.put("owner", ownerInfo);
+
+                    Map<String, Object> response = Map.of("stats", stats);
+                    sendJsonResponse(exchange, response, 200);
+
+                } catch (IllegalArgumentException e) {
+                    sendErrorResponse(exchange, "Invalid group ID format", 400);
+                } catch (Exception e) {
+                    plugin.getLogger().warning("Error getting group stats: " + e.getMessage());
+                    e.printStackTrace();
+                    sendErrorResponse(exchange, "Internal server error", 500);
+                }
+            } else {
+                sendErrorResponse(exchange, "Method not allowed", 405);
+            }
+        }
+    }
+
     private String readRequestBody(HttpExchange exchange) throws IOException {
         InputStream inputStream = exchange.getRequestBody();
         return new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
@@ -1145,5 +1481,65 @@ public class EmbeddedWebServer {
         // search in db
         String playerName = userDataManager.getPlayerNameByUUID(playerUUID);
         return playerName != null ? playerName : "Unknown Player";
+    }
+
+    private class UpdateGroupHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            new CORSHandler().handle(exchange);
+
+            if ("POST".equals(exchange.getRequestMethod())) {
+                try {
+                    InputStream inputStream = exchange.getRequestBody();
+                    String requestBody = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
+                    
+                    Map<String, Object> requestData = gson.fromJson(requestBody, Map.class);
+                    
+                    String groupId = (String) requestData.get("groupId");
+                    String groupName = (String) requestData.get("groupName");
+                    String description = (String) requestData.get("description");
+                    Double maxMembersDouble = (Double) requestData.get("maxMembers");
+                    Boolean isPrivate = (Boolean) requestData.get("isPrivate");
+                    String motd = (String) requestData.get("motd");
+                    List<String> announcements = (List<String>) requestData.get("announcements");
+                    
+                    if (groupId == null) {
+                        sendErrorResponse(exchange, "Group ID is required", 400);
+                        return;
+                    }
+                    
+                    UUID groupUUID = UUID.fromString(groupId);
+                    
+                    boolean success = groupManager.updateGroupInfo(
+                        groupUUID, 
+                        groupName, 
+                        description, 
+                        maxMembersDouble != null ? maxMembersDouble.intValue() : null,
+                        isPrivate
+                    );
+                    
+                    if (motd != null && success) {
+                        success = groupManager.updateGroupMotd(groupUUID, motd);
+                    }
+                    
+                    if (announcements != null && success) {
+                        success = groupManager.updateGroupAnnouncements(groupUUID, announcements);
+                    }
+                    
+                    if (success) {
+                        Map<String, Object> response = Map.of("success", true, "message", "Group updated successfully");
+                        sendJsonResponse(exchange, response, 200);
+                    } else {
+                        sendErrorResponse(exchange, "Failed to update group", 500);
+                    }
+                    
+                } catch (Exception e) {
+                    e.printStackTrace();
+                    sendErrorResponse(exchange, "Invalid request format", 400);
+                }
+            } else {
+                sendErrorResponse(exchange, "Method not allowed", 405);
+            }
+        }
     }
 }

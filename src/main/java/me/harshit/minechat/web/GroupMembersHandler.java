@@ -15,6 +15,7 @@ import org.bukkit.entity.Player;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -69,17 +70,10 @@ public class GroupMembersHandler implements HttpHandler {
             }
 
             UUID groupUUID = UUID.fromString(groupId);
-            Document groupDoc = groupManager.getGroupById(groupUUID);
+            GroupInfo group = groupManager.getGroupById(groupUUID);
 
-            if (groupDoc == null) {
-                sendErrorResponse(exchange, 404, "Group not found");
-                return;
-            }
-
-            // convert document to GroupInfo
-            GroupInfo group = GroupInfo.fromDocument(groupDoc);
             if (group == null) {
-                sendErrorResponse(exchange, 500, "Failed to parse group data");
+                sendErrorResponse(exchange, 404, "Group not found");
                 return;
             }
 
@@ -98,10 +92,12 @@ public class GroupMembersHandler implements HttpHandler {
 
             for (GroupMember member : members) {
                 Map<String, Object> memberData = new HashMap<>();
+                memberData.put("playerUUID", member.getPlayerId().toString());
                 memberData.put("playerId", member.getPlayerId().toString());
                 memberData.put("playerName", member.getPlayerName());
                 memberData.put("role", member.getRole().name());
                 memberData.put("roleDisplayName", member.getRole().getDisplayName());
+                memberData.put("joinedAt", member.getJoinedDate().toInstant(ZoneOffset.UTC).toEpochMilli());
                 memberData.put("joinedDate", member.getJoinedDate().toString());
 
                 Player onlinePlayer = Bukkit.getPlayer(member.getPlayerId());

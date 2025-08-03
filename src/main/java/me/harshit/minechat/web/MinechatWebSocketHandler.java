@@ -41,9 +41,9 @@ public class MinechatWebSocketHandler extends WebSocketAdapter {
         sessions.put(sessionId, session);
         sessionIds.put(session, sessionId);
 
-        plugin.getLogger().info("WebSocket connection established: " + sessionId);
+        plugin.getLogger().fine("WebSocket connection established: " + sessionId);
 
-        // Send connection confirmation
+        // send connection confirmation
         JsonObject response = new JsonObject();
         response.addProperty("type", "connection");
         response.addProperty("sessionId", sessionId);
@@ -61,7 +61,10 @@ public class MinechatWebSocketHandler extends WebSocketAdapter {
             String type = json.get("type").getAsString();
             JsonObject data = json.has("data") ? json.getAsJsonObject("data") : new JsonObject();
 
-            plugin.getLogger().info("WebSocket message received: " + type + " from session: " + sessionId);
+            // only log non-routine messages to reduce spam
+            if (!"ping".equals(type) && !"group_message".equals(type)) {
+                plugin.getLogger().fine("WebSocket message received: " + type + " from session: " + sessionId);
+            }
 
             // Handle authentication
             if ("auth".equals(type)) {
@@ -69,7 +72,13 @@ public class MinechatWebSocketHandler extends WebSocketAdapter {
                 return;
             }
 
-            // Route to API handler for other message types
+            // Handle ping messages silently
+            if ("ping".equals(type)) {
+                handlePing();
+                return;
+            }
+
+            // route to API handler for other message types
             if (apiHandler != null) {
                 apiHandler.handleWebMessage(sessionId, type, data);
             } else {
@@ -95,7 +104,10 @@ public class MinechatWebSocketHandler extends WebSocketAdapter {
                 apiHandler.removeSession(sessionId);
             }
 
-            plugin.getLogger().info("WebSocket connection closed: " + sessionId + " (Code: " + statusCode + ", Reason: " + reason + ")");
+            // Only log unexpected disconnections, not normal client disconnects or timeouts
+            if (statusCode != 1000 && statusCode != 1001) {
+                plugin.getLogger().fine("WebSocket connection closed: " + sessionId + " (Code: " + statusCode + ", Reason: " + reason + ")");
+            }
         }
     }
 
@@ -103,8 +115,14 @@ public class MinechatWebSocketHandler extends WebSocketAdapter {
     @OnWebSocketError
     public void onWebSocketError(Throwable cause) {
         super.onWebSocketError(cause);
+
+        // Handle timeout errors silently as they are normal
+        if (cause.getMessage() != null && cause.getMessage().contains("Idle Timeout")) {
+            plugin.getLogger().fine("WebSocket idle timeout for session " + sessionId);
+            return;
+        }
+
         plugin.getLogger().warning("WebSocket error for session " + sessionId + ": " + cause.getMessage());
-        cause.printStackTrace();
     }
 
     private void handleAuthentication(JsonObject data) {
@@ -132,6 +150,16 @@ public class MinechatWebSocketHandler extends WebSocketAdapter {
         } catch (Exception e) {
             plugin.getLogger().warning("Error during WebSocket authentication: " + e.getMessage());
             sendError("Authentication error");
+        }
+    }
+
+    private void handlePing() {
+        try {
+            JsonObject response = new JsonObject();
+            response.addProperty("type", "pong");
+            sendMessage(getSession(), response);
+        } catch (Exception e) {
+            plugin.getLogger().warning("Error handling ping: " + e.getMessage());
         }
     }
 

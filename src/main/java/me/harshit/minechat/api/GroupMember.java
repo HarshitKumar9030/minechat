@@ -57,7 +57,7 @@ public class GroupMember {
 
     public static GroupMember fromDocument(org.bson.Document memberDoc) {
         if (memberDoc == null) return null;
-
+        
         try {
             UUID playerId = UUID.fromString(memberDoc.getString("playerId"));
             String playerName = memberDoc.getString("playerName");
@@ -65,12 +65,12 @@ public class GroupMember {
             GroupRole role = GroupRole.valueOf(roleString.toUpperCase());
             long joinedTimestamp = memberDoc.getLong("joinedDate");
             boolean isOnline = memberDoc.getBoolean("isOnline", false);
-
+            
             LocalDateTime joinedDate = LocalDateTime.ofInstant(
                 java.time.Instant.ofEpochMilli(joinedTimestamp),
                 java.time.ZoneId.systemDefault()
             );
-
+            
             return new GroupMember(playerId, playerName, role, joinedDate, isOnline);
         } catch (Exception e) {
             return null;

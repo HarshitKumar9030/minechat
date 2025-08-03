@@ -98,16 +98,10 @@ public class GroupMessagesHandler implements HttpHandler {
 
         try {
             UUID groupUUID = UUID.fromString(groupId);
-            Document groupDoc = groupManager.getGroupById(groupUUID);
+            GroupInfo group = groupManager.getGroupById(groupUUID);
 
-            if (groupDoc == null) {
-                sendErrorResponse(exchange, 404, "Group not found");
-                return;
-            }
-
-            GroupInfo group = GroupInfo.fromDocument(groupDoc);
             if (group == null) {
-                sendErrorResponse(exchange, 500, "Failed to parse group data");
+                sendErrorResponse(exchange, 404, "Group not found");
                 return;
             }
 

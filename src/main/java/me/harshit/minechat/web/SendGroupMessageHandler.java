@@ -77,19 +77,14 @@ public class SendGroupMessageHandler implements HttpHandler {
             }
 
             UUID groupUUID = UUID.fromString(groupId);
-            UUID senderUUID = UUID.fromString(senderId);
+            GroupInfo group = groupManager.getGroupById(groupUUID);
 
-            Document groupDoc = groupManager.getGroupById(groupUUID);
-            if (groupDoc == null) {
+            if (group == null) {
                 sendErrorResponse(exchange, 404, "Group not found");
                 return;
             }
 
-            GroupInfo group = GroupInfo.fromDocument(groupDoc);
-            if (group == null) {
-                sendErrorResponse(exchange, 500, "Failed to parse group data");
-                return;
-            }
+            UUID senderUUID = UUID.fromString(senderId);
 
             GroupMember senderMember = groupManager.getGroupMember(groupUUID, senderUUID);
             if (senderMember == null) {

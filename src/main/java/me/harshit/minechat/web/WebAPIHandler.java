@@ -1,8 +1,8 @@
 package me.harshit.minechat.web;
 
-import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import me.harshit.minechat.Minechat;
+import me.harshit.minechat.api.GroupInfo;
 import me.harshit.minechat.database.FriendManager;
 import me.harshit.minechat.database.GroupManager;
 import me.harshit.minechat.database.UserDataManager;
@@ -24,8 +24,7 @@ public class WebAPIHandler {
     private final UserDataManager userDataManager;
     private final FriendManager friendManager;
     private final GroupManager groupManager;
-    private final Gson gson;
-    private MinechatWebSocketServer webSocketServer;
+    private final MinechatWebSocketServer webSocketServer;
 
     // Store active web sessions for real-time updates
     private final Map<String, WebSession> activeSessions = new ConcurrentHashMap<>();
@@ -36,7 +35,6 @@ public class WebAPIHandler {
         this.userDataManager = userDataManager;
         this.friendManager = friendManager;
         this.groupManager = groupManager;
-        this.gson = new Gson();
 
         int wsPort = plugin.getConfig().getInt("web.websocket-port", 8081);
         this.webSocketServer = new MinechatWebSocketServer(plugin, this, wsPort);
@@ -53,7 +51,9 @@ public class WebAPIHandler {
             return;
         }
 
-        plugin.getLogger().info("Handling web message: " + messageType + " from session: " + sessionId);
+        if (!"group_message".equals(messageType) && !"friend_message".equals(messageType)) {
+            plugin.getLogger().fine("Handling web message: " + messageType + " from session: " + sessionId);
+        }
 
         switch (messageType.toLowerCase()) {
             case "friend_message":
@@ -222,6 +222,8 @@ public class WebAPIHandler {
             }
 
             UUID groupId = UUID.fromString(group.getString("groupId"));
+            String messageId = UUID.randomUUID().toString();
+            long timestamp = System.currentTimeMillis();
 
             // Store message for persistence
             groupManager.storeGroupMessage(groupId, session.getPlayerId(),
@@ -247,21 +249,29 @@ public class WebAPIHandler {
                     }
                 }
 
-                // Notify all web sessions in this group
-                broadcastToGroupWebSessions(groupId, "group_message", Map.of(
+                // Create complete message data with ID
+                Map<String, Object> messageData = Map.of(
+                    "messageId", messageId,
                     "group", groupName,
                     "groupId", groupId.toString(),
                     "sender", session.getPlayerName(),
+                    "senderUUID", session.getPlayerId().toString(),
+                    "senderName", session.getPlayerName(),
                     "message", message,
-                    "timestamp", System.currentTimeMillis(),
+                    "content", message,
+                    "timestamp", timestamp,
                     "source", "web"
-                ));
+                );
 
+                // Broadcast to ALL web sessions in this group (including sender for consistency)
+                broadcastToGroupWebSessions(groupId, "group_message", messageData);
+
+                // Send confirmation to sender
                 sendWebResponse(session.getSessionId(), "message_sent", Map.of(
                     "type", "group_message",
                     "group", groupName,
                     "message", message,
-                    "timestamp", System.currentTimeMillis()
+                    "timestamp", timestamp
                 ));
             });
         });
@@ -420,7 +430,7 @@ public class WebAPIHandler {
             Map<String, Object> playerData = new HashMap<>();
             playerData.put("name", player.getName());
             playerData.put("uuid", player.getUniqueId().toString());
-            playerData.put("displayName", player.getDisplayName());
+            playerData.put("displayName", player.displayName().toString());
             onlinePlayers.add(playerData);
         }
 
@@ -654,13 +664,13 @@ public class WebAPIHandler {
                 return;
             }
 
-            Document group = groupManager.getGroupById(UUID.fromString(groupId));
+            GroupInfo group = groupManager.getGroupById(UUID.fromString(groupId));
             if (group == null) {
                 sendWebResponse(session.getSessionId(), "error", "Group not found");
                 return;
             }
 
-            List<Document> members = group.getList("members", Document.class);
+            List<Document> members = groupManager.getPlayerGroupsAsDocuments(session.getPlayerId());
 
             Map<String, Object> response = new HashMap<>();
             response.put("groupId", groupId);
@@ -715,15 +725,15 @@ public class WebAPIHandler {
         String groupName = data.get("groupName").getAsString();
         String description = data.has("description") ? data.get("description").getAsString() : "";
         int maxMembers = data.has("maxMembers") ? data.get("maxMembers").getAsInt() : 20;
-        boolean isPublic = data.has("isPublic") ? data.get("isPublic").getAsBoolean() : false;
+        boolean isPublic = data.has("isPublic") && data.get("isPublic").getAsBoolean();
 
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
-            UUID groupId = groupManager.createGroup(session.getPlayerId(), session.getPlayerName(),
+            GroupInfo groupInfo = groupManager.createGroup(session.getPlayerId(), session.getPlayerName(),
                 groupName, description, maxMembers, isPublic);
 
-            if (groupId != null) {
+            if (groupInfo != null) {
                 sendWebResponse(session.getSessionId(), "group_created", Map.of(
-                    "groupId", groupId.toString(),
+                    "groupId", groupInfo.getGroupId().toString(),
                     "groupName", groupName,
                     "description", description,
                     "maxMembers", maxMembers,
@@ -807,11 +817,18 @@ public class WebAPIHandler {
 
     // broadcasts a message from Minecraft to web clients
     public void broadcastMinecraftMessage(UUID senderId, String senderName, String message, String type, Object context) {
+        String messageId = UUID.randomUUID().toString();
+        long timestamp = System.currentTimeMillis();
+        
         Map<String, Object> data = new HashMap<>();
+        data.put("messageId", messageId);
         data.put("sender", senderName);
+        data.put("senderUUID", senderId.toString());
+        data.put("senderName", senderName);
         data.put("senderId", senderId.toString());
         data.put("message", message);
-        data.put("timestamp", System.currentTimeMillis());
+        data.put("content", message);
+        data.put("timestamp", timestamp);
         data.put("source", "minecraft");
 
         switch (type) {
@@ -825,6 +842,16 @@ public class WebAPIHandler {
             case "group_message":
                 UUID groupId = (UUID) context;
                 data.put("groupId", groupId.toString());
+                // Get group name for the message
+                try {
+                    Document group = groupManager.getGroup(groupId);
+                    if (group != null) {
+                        data.put("group", group.getString("groupName"));
+                        data.put("groupName", group.getString("groupName"));
+                    }
+                } catch (Exception e) {
+                    // Silently handle error
+                }
                 broadcastToGroupWebSessions(groupId, "group_message", data);
                 break;
         }
@@ -833,7 +860,6 @@ public class WebAPIHandler {
     private void sendWebResponse(String sessionId, String type, Object data) {
         if (MinechatWebSocketHandler.isSessionConnected(sessionId)) {
             MinechatWebSocketHandler.sendToSession(sessionId, type, data);
-            plugin.getLogger().info("WebSocket response sent for session " + sessionId + ": " + type);
             return;
         }
 
@@ -847,10 +873,6 @@ public class WebAPIHandler {
                 response.put("sessionId", sessionId);
 
                 session.addResponse(response);
-
-                plugin.getLogger().info("Web response queued for session " + sessionId + ": " + type);
-            } else {
-                plugin.getLogger().warning("Attempted to send response to inactive session: " + sessionId);
             }
         } catch (Exception e) {
             plugin.getLogger().warning("Failed to send web response: " + e.getMessage());
@@ -860,6 +882,13 @@ public class WebAPIHandler {
     private void broadcastToGroupWebSessions(UUID groupId, String type, Object data) {
         activeSessions.values().stream()
             .filter(session -> isPlayerInGroup(session.getPlayerId(), groupId))
+            .forEach(session -> sendWebResponse(session.getSessionId(), type, data));
+    }
+
+    private void broadcastToGroupWebSessionsExcludingSender(UUID groupId, String senderSessionId, String type, Object data) {
+        activeSessions.values().stream()
+            .filter(session -> isPlayerInGroup(session.getPlayerId(), groupId))
+            .filter(session -> !session.getSessionId().equals(senderSessionId))
             .forEach(session -> sendWebResponse(session.getSessionId(), type, data));
     }
 

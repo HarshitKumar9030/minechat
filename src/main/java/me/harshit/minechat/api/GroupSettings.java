@@ -20,14 +20,16 @@ public class GroupSettings {
     private final List<String> allowedRanks;
     private final List<UUID> mutedMembers;
     private final List<UUID> bannedMembers;
-    private final String groupMotd; // message of the day, todo
+    private final String groupMotd; // message of the day
+    private final List<String> announcements; // group announcements
     private final String inviteCode; // for private group invites
 
     public GroupSettings(boolean allowInvites, boolean friendsOnly, boolean muteNonMembers,
                         boolean logMessages, boolean webAccessEnabled, boolean joinRequiresApproval,
                         boolean membersCanInvite, boolean onlyAdminsCanMessage, boolean enableAnnouncements,
                         String joinMessage, String leaveMessage, List<String> allowedRanks,
-                        List<UUID> mutedMembers, List<UUID> bannedMembers, String groupMotd, String inviteCode) {
+                        List<UUID> mutedMembers, List<UUID> bannedMembers, String groupMotd, 
+                        List<String> announcements, String inviteCode) {
         this.allowInvites = allowInvites;
         this.friendsOnly = friendsOnly;
         this.muteNonMembers = muteNonMembers;
@@ -43,6 +45,7 @@ public class GroupSettings {
         this.mutedMembers = mutedMembers != null ? new ArrayList<>(mutedMembers) : new ArrayList<>();
         this.bannedMembers = bannedMembers != null ? new ArrayList<>(bannedMembers) : new ArrayList<>();
         this.groupMotd = groupMotd;
+        this.announcements = announcements != null ? new ArrayList<>(announcements) : new ArrayList<>();
         this.inviteCode = inviteCode;
     }
 
@@ -64,6 +67,7 @@ public class GroupSettings {
             new ArrayList<>(), // mutedMembers
             new ArrayList<>(), // bannedMembers
             "", // groupMotd
+            new ArrayList<>(), // announcements
             generateInviteCode() // inviteCode
         );
     }
@@ -87,6 +91,7 @@ public class GroupSettings {
     public List<UUID> getMutedMembers() { return new ArrayList<>(mutedMembers); }
     public List<UUID> getBannedMembers() { return new ArrayList<>(bannedMembers); }
     public String getGroupMotd() { return groupMotd; }
+    public List<String> getAnnouncements() { return new ArrayList<>(announcements); }
     public String getInviteCode() { return inviteCode; }
 
     public boolean isPlayerMuted(UUID playerId) {
@@ -148,7 +153,7 @@ public class GroupSettings {
             return new GroupSettings(allowInvites, friendsOnly, muteNonMembers, logMessages,
                     webAccessEnabled, joinRequiresApproval, membersCanInvite, onlyAdminsCanMessage,
                     enableAnnouncements, joinMessage, leaveMessage, allowedRanks, mutedMembers,
-                    bannedMembers, groupMotd, inviteCode);
+                    bannedMembers, groupMotd, new ArrayList<>(), inviteCode);
         } catch (Exception e) {
             return getDefault();
         }
@@ -170,6 +175,7 @@ public class GroupSettings {
         private List<UUID> mutedMembers = new ArrayList<>();
         private List<UUID> bannedMembers = new ArrayList<>();
         private String groupMotd = "";
+        private List<String> announcements = new ArrayList<>();
         private String inviteCode = generateInviteCode();
 
         public Builder allowInvites(boolean allowInvites) {
@@ -247,6 +253,11 @@ public class GroupSettings {
             return this;
         }
 
+        public Builder announcements(List<String> announcements) {
+            this.announcements = new ArrayList<>(announcements);
+            return this;
+        }
+
         public Builder inviteCode(String inviteCode) {
             this.inviteCode = inviteCode;
             return this;
@@ -256,7 +267,7 @@ public class GroupSettings {
             return new GroupSettings(allowInvites, friendsOnly, muteNonMembers, logMessages,
                     webAccessEnabled, joinRequiresApproval, membersCanInvite, onlyAdminsCanMessage,
                     enableAnnouncements, joinMessage, leaveMessage, allowedRanks, mutedMembers,
-                    bannedMembers, groupMotd, inviteCode);
+                    bannedMembers, groupMotd, new ArrayList<>(), inviteCode);
         }
     }
 }

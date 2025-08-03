@@ -28,7 +28,7 @@ public class ChatCommandHandler implements CommandExecutor, TabCompleter {
     private final UserDataManager userDataManager;
     private final FriendManager friendManager; // maybe will use it later
 
-    // Map to track last message senders for each player (UUID)
+    // map to track last message senders for each player (UUID)
     private final Map<String, String> lastMessageSenders = new ConcurrentHashMap<>();
 
     public ChatCommandHandler(Minechat plugin, DatabaseManager databaseManager, UserDataManager userDataManager, FriendManager friendManager) {
@@ -84,13 +84,8 @@ public class ChatCommandHandler implements CommandExecutor, TabCompleter {
             sender.sendMessage(Component.text("    Complete friend management system").color(NamedTextColor.GRAY));
             sender.sendMessage(Component.text(""));
 
-            // Group Commands
-            sender.sendMessage(Component.text("👪 Group System:").color(NamedTextColor.LIGHT_PURPLE).decorate(TextDecoration.BOLD)); // yeah the emoji means a group 🫡
-            sender.sendMessage(Component.text("  • /group - Show group commands").color(NamedTextColor.GREEN));
-            sender.sendMessage(Component.text("    Complete group chat system").color(NamedTextColor.GRAY));
-            sender.sendMessage(Component.text(""));
 
-            // Private Messages
+            // private messages
             sender.sendMessage(Component.text("💬 Private Messaging:").color(NamedTextColor.BLUE).decorate(TextDecoration.BOLD));
             sender.sendMessage(Component.text("  • /msg <player> <message>").color(NamedTextColor.GREEN));
             sender.sendMessage(Component.text("    Send private message").color(NamedTextColor.GRAY));
@@ -100,7 +95,7 @@ public class ChatCommandHandler implements CommandExecutor, TabCompleter {
             sender.sendMessage(Component.text("    Reply to last message received").color(NamedTextColor.GRAY));
             sender.sendMessage(Component.text(""));
 
-            // Admin Commands
+            // admin commands
             if (sender.hasPermission("minechat.admin")) {
                 sender.sendMessage(Component.text("⚙ Admin Commands:").color(NamedTextColor.RED).decorate(TextDecoration.BOLD));
                 sender.sendMessage(Component.text("  • /minechat reload").color(NamedTextColor.GREEN));
@@ -108,7 +103,6 @@ public class ChatCommandHandler implements CommandExecutor, TabCompleter {
                 sender.sendMessage(Component.text(""));
             }
 
-            // Footer
             sender.sendMessage(Component.text("═════════════════════════════").color(NamedTextColor.GOLD));
             sender.sendMessage(Component.text("💡 Tip: Use /minechat status to check web access").color(NamedTextColor.AQUA));
             sender.sendMessage(Component.text("🌐 Aliases: /mc, /mchat").color(NamedTextColor.AQUA));

@@ -145,36 +145,172 @@ public class GroupCommandHandler implements CommandExecutor, TabCompleter {
 
     private void showGroupHelp(Player player) {
         player.sendMessage(Component.text(""));
-        player.sendMessage(Component.text("════════ GROUP COMMANDS ════════").color(NamedTextColor.GOLD));
+        player.sendMessage(Component.text("▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬")
+                .color(NamedTextColor.GOLD));
+        player.sendMessage(Component.text("               🏰 GROUP COMMANDS 🏰")
+                .color(NamedTextColor.GOLD)
+                .decoration(TextDecoration.BOLD, true));
+        player.sendMessage(Component.text("▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬")
+                .color(NamedTextColor.GOLD));
         player.sendMessage(Component.text(""));
 
-        player.sendMessage(Component.text("Basic Commands:", NamedTextColor.YELLOW, TextDecoration.BOLD));
-        player.sendMessage(Component.text("  /group create <name> [description] - Create a new group").color(NamedTextColor.WHITE));
-        player.sendMessage(Component.text("  /group join <name|code> - Join a public group or by invite code").color(NamedTextColor.WHITE));
-        player.sendMessage(Component.text("  /group leave [group] - Leave a group").color(NamedTextColor.WHITE));
-        player.sendMessage(Component.text("  /group list - Show your groups").color(NamedTextColor.WHITE));
-        player.sendMessage(Component.text("  /group search <query> - Search public groups").color(NamedTextColor.WHITE));
+        // Basic Commands Section
+        player.sendMessage(Component.text("📋 Basic Commands")
+                .color(NamedTextColor.AQUA)
+                .decoration(TextDecoration.BOLD, true));
+        player.sendMessage(Component.text("  ➤ ").color(NamedTextColor.GRAY)
+                .append(Component.text("/group create <name> [description]").color(NamedTextColor.WHITE))
+                .append(Component.text(" - Create a new group").color(NamedTextColor.GRAY)));
+        player.sendMessage(Component.text("  ➤ ").color(NamedTextColor.GRAY)
+                .append(Component.text("/group join <name|code>").color(NamedTextColor.WHITE))
+                .append(Component.text(" - Join a public group or by invite code").color(NamedTextColor.GRAY)));
+        player.sendMessage(Component.text("  ➤ ").color(NamedTextColor.GRAY)
+                .append(Component.text("/group leave <group>").color(NamedTextColor.WHITE))
+                .append(Component.text(" - Leave a group").color(NamedTextColor.GRAY)));
+        player.sendMessage(Component.text("  ➤ ").color(NamedTextColor.GRAY)
+                .append(Component.text("/group delete <group>").color(NamedTextColor.WHITE))
+                .append(Component.text(" - Delete/disband a group ").color(NamedTextColor.GRAY))
+                .append(Component.text("(owner only)").color(NamedTextColor.DARK_RED)));
+        player.sendMessage(Component.text("  ➤ ").color(NamedTextColor.GRAY)
+                .append(Component.text("/group list").color(NamedTextColor.WHITE))
+                .append(Component.text(" - Show your groups").color(NamedTextColor.GRAY)));
+        player.sendMessage(Component.text("  ➤ ").color(NamedTextColor.GRAY)
+                .append(Component.text("/group search <query>").color(NamedTextColor.WHITE))
+                .append(Component.text(" - Search public groups").color(NamedTextColor.GRAY)));
+        player.sendMessage(Component.text("  ➤ ").color(NamedTextColor.GRAY)
+                .append(Component.text("/group info <group>").color(NamedTextColor.WHITE))
+                .append(Component.text(" - Show detailed group information").color(NamedTextColor.GRAY)));
+        player.sendMessage(Component.text("  ➤ ").color(NamedTextColor.GRAY)
+                .append(Component.text("/group members <group>").color(NamedTextColor.WHITE))
+                .append(Component.text(" - List all group members").color(NamedTextColor.GRAY)));
         player.sendMessage(Component.text(""));
 
-        player.sendMessage(Component.text("Messaging:", NamedTextColor.YELLOW, TextDecoration.BOLD));
-        player.sendMessage(Component.text("  /group chat <group> <message> - Send a message").color(NamedTextColor.WHITE));
-        player.sendMessage(Component.text("  /group announce <group> <message> - Send announcement (admin)").color(NamedTextColor.WHITE));
-        player.sendMessage(Component.text("  /group motd <group> [message] - Set/view message of the day").color(NamedTextColor.WHITE));
+        // Invitations Section
+        player.sendMessage(Component.text("📩 Invitations & Access")
+                .color(NamedTextColor.LIGHT_PURPLE)
+                .decoration(TextDecoration.BOLD, true));
+        player.sendMessage(Component.text("  ➤ ").color(NamedTextColor.GRAY)
+                .append(Component.text("/group invite <group> <player>").color(NamedTextColor.WHITE))
+                .append(Component.text(" - Invite a player to your group").color(NamedTextColor.GRAY)));
+        player.sendMessage(Component.text("  ➤ ").color(NamedTextColor.GRAY)
+                .append(Component.text("/group accept <group>").color(NamedTextColor.WHITE))
+                .append(Component.text(" - Accept a group invitation").color(NamedTextColor.GRAY)));
+        player.sendMessage(Component.text("  ➤ ").color(NamedTextColor.GRAY)
+                .append(Component.text("/group deny <group>").color(NamedTextColor.WHITE))
+                .append(Component.text(" - Deny a group invitation").color(NamedTextColor.GRAY)));
+        player.sendMessage(Component.text("  ➤ ").color(NamedTextColor.GRAY)
+                .append(Component.text("/group invites").color(NamedTextColor.WHITE))
+                .append(Component.text(" - Show your pending invitations").color(NamedTextColor.GRAY)));
+        player.sendMessage(Component.text("  ➤ ").color(NamedTextColor.GRAY)
+                .append(Component.text("/group code <group>").color(NamedTextColor.WHITE))
+                .append(Component.text(" - Get invite code for private groups").color(NamedTextColor.GRAY)));
         player.sendMessage(Component.text(""));
 
+        // Messaging Section
+        player.sendMessage(Component.text("💬 Group Messaging")
+                .color(NamedTextColor.GREEN)
+                .decoration(TextDecoration.BOLD, true));
+        player.sendMessage(Component.text("  ➤ ").color(NamedTextColor.GRAY)
+                .append(Component.text("/group chat <group> <message>").color(NamedTextColor.WHITE))
+                .append(Component.text(" - Send a message to the group").color(NamedTextColor.GRAY)));
+        player.sendMessage(Component.text("  ➤ ").color(NamedTextColor.GRAY)
+                .append(Component.text("/group announce <group> <message>").color(NamedTextColor.WHITE))
+                .append(Component.text(" - Send announcement ").color(NamedTextColor.GRAY))
+                .append(Component.text("(admin)").color(NamedTextColor.GOLD)));
+        player.sendMessage(Component.text("  ➤ ").color(NamedTextColor.GRAY)
+                .append(Component.text("/group motd <group> [message]").color(NamedTextColor.WHITE))
+                .append(Component.text(" - Set/view message of the day").color(NamedTextColor.GRAY)));
+        player.sendMessage(Component.text("  ➤ ").color(NamedTextColor.GRAY)
+                .append(Component.text("/group clear <group>").color(NamedTextColor.WHITE))
+                .append(Component.text(" - Clear group chat ").color(NamedTextColor.GRAY))
+                .append(Component.text("(admin)").color(NamedTextColor.GOLD)));
+        player.sendMessage(Component.text(""));
+
+        // admin Commands (only show if player has admin groups)
         if (hasAdminGroups(player)) {
-            player.sendMessage(Component.text("Management (Admin/Owner):", NamedTextColor.YELLOW, TextDecoration.BOLD));
-            player.sendMessage(Component.text("  /group invite <group> <player> - Invite a player").color(NamedTextColor.WHITE));
-            player.sendMessage(Component.text("  /group kick <group> <player> - Kick a member").color(NamedTextColor.WHITE));
-            player.sendMessage(Component.text("  /group ban <group> <player> - Ban a player").color(NamedTextColor.WHITE));
-            player.sendMessage(Component.text("  /group promote <group> <player> - Promote to admin").color(NamedTextColor.WHITE));
-            player.sendMessage(Component.text("  /group settings <group> - Manage group settings").color(NamedTextColor.WHITE));
-            player.sendMessage(Component.text("  /group private <group> - Make group private").color(NamedTextColor.WHITE));
-            player.sendMessage(Component.text("  /group public <group> - Make group public").color(NamedTextColor.WHITE));
+            player.sendMessage(Component.text("⚔️ Member Management")
+                    .color(NamedTextColor.RED)
+                    .decoration(TextDecoration.BOLD, true)
+                    .append(Component.text(" (Admin/Owner)").color(NamedTextColor.DARK_RED)));
+            player.sendMessage(Component.text("  ➤ ").color(NamedTextColor.GRAY)
+                    .append(Component.text("/group kick <group> <player> [reason]").color(NamedTextColor.WHITE))
+                    .append(Component.text(" - Kick a member").color(NamedTextColor.GRAY)));
+            player.sendMessage(Component.text("  ➤ ").color(NamedTextColor.GRAY)
+                    .append(Component.text("/group ban <group> <player> [reason]").color(NamedTextColor.WHITE))
+                    .append(Component.text(" - Ban a player").color(NamedTextColor.GRAY)));
+            player.sendMessage(Component.text("  ➤ ").color(NamedTextColor.GRAY)
+                    .append(Component.text("/group unban <group> <player>").color(NamedTextColor.WHITE))
+                    .append(Component.text(" - Unban a player").color(NamedTextColor.GRAY)));
+            player.sendMessage(Component.text("  ➤ ").color(NamedTextColor.GRAY)
+                    .append(Component.text("/group mute <group> <player> [duration]").color(NamedTextColor.WHITE))
+                    .append(Component.text(" - Mute a member").color(NamedTextColor.GRAY)));
+            player.sendMessage(Component.text("  ➤ ").color(NamedTextColor.GRAY)
+                    .append(Component.text("/group unmute <group> <player>").color(NamedTextColor.WHITE))
+                    .append(Component.text(" - Unmute a member").color(NamedTextColor.GRAY)));
+            player.sendMessage(Component.text(""));
+
+            player.sendMessage(Component.text("👑 Role Management")
+                    .color(NamedTextColor.YELLOW)
+                    .decoration(TextDecoration.BOLD, true)
+                    .append(Component.text(" (Owner Only)").color(NamedTextColor.GOLD)));
+            player.sendMessage(Component.text("  ➤ ").color(NamedTextColor.GRAY)
+                    .append(Component.text("/group promote <group> <player>").color(NamedTextColor.WHITE))
+                    .append(Component.text(" - Promote member to admin").color(NamedTextColor.GRAY)));
+            player.sendMessage(Component.text("  ➤ ").color(NamedTextColor.GRAY)
+                    .append(Component.text("/group demote <group> <player>").color(NamedTextColor.WHITE))
+                    .append(Component.text(" - Demote admin to member").color(NamedTextColor.GRAY)));
+            player.sendMessage(Component.text("  ➤ ").color(NamedTextColor.GRAY)
+                    .append(Component.text("/group admin <group> <player>").color(NamedTextColor.WHITE))
+                    .append(Component.text(" - Set player as admin").color(NamedTextColor.GRAY)));
+            player.sendMessage(Component.text("  ➤ ").color(NamedTextColor.GRAY)
+                    .append(Component.text("/group mod <group> <player>").color(NamedTextColor.WHITE))
+                    .append(Component.text(" - Set player as moderator").color(NamedTextColor.GRAY)));
+            player.sendMessage(Component.text(""));
+
+            player.sendMessage(Component.text("⚙ Group Settings")
+                    .color(NamedTextColor.BLUE)
+                    .decoration(TextDecoration.BOLD, true)
+                    .append(Component.text(" (Admin/Owner)").color(NamedTextColor.DARK_BLUE)));
+            player.sendMessage(Component.text("  ➤ ").color(NamedTextColor.GRAY)
+                    .append(Component.text("/group settings <group>").color(NamedTextColor.WHITE))
+                    .append(Component.text(" - Manage group settings").color(NamedTextColor.GRAY)));
+            player.sendMessage(Component.text("  ➤ ").color(NamedTextColor.GRAY)
+                    .append(Component.text("/group private <group>").color(NamedTextColor.WHITE))
+                    .append(Component.text(" - Make group private").color(NamedTextColor.GRAY)));
+            player.sendMessage(Component.text("  ➤ ").color(NamedTextColor.GRAY)
+                    .append(Component.text("/group public <group>").color(NamedTextColor.WHITE))
+                    .append(Component.text(" - Make group public").color(NamedTextColor.GRAY)));
             player.sendMessage(Component.text(""));
         }
 
-        player.sendMessage(Component.text("═══════════════════════════════").color(NamedTextColor.GOLD));
+        // footer with tips and aliases
+        player.sendMessage(Component.text("▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬")
+                .color(NamedTextColor.GOLD));
+
+        player.sendMessage(Component.text("💡 Tips & Aliases:")
+                .color(NamedTextColor.YELLOW)
+                .decoration(TextDecoration.BOLD, true));
+        player.sendMessage(Component.text("  • Use ").color(NamedTextColor.GRAY)
+                .append(Component.text("/groups").color(NamedTextColor.AQUA))
+                .append(Component.text(" or ").color(NamedTextColor.GRAY))
+                .append(Component.text("/g").color(NamedTextColor.AQUA))
+                .append(Component.text(" as shortcuts").color(NamedTextColor.GRAY)));
+        player.sendMessage(Component.text("  • ").color(NamedTextColor.GRAY)
+                .append(Component.text("'disband'").color(NamedTextColor.AQUA))
+                .append(Component.text(" = ").color(NamedTextColor.GRAY))
+                .append(Component.text("'delete'").color(NamedTextColor.AQUA))
+                .append(Component.text(", ").color(NamedTextColor.GRAY))
+                .append(Component.text("'msg'").color(NamedTextColor.AQUA))
+                .append(Component.text(" = ").color(NamedTextColor.GRAY))
+                .append(Component.text("'chat'").color(NamedTextColor.AQUA))
+                .append(Component.text(", ").color(NamedTextColor.GRAY))
+                .append(Component.text("'pending'").color(NamedTextColor.AQUA))
+                .append(Component.text(" = ").color(NamedTextColor.GRAY))
+                .append(Component.text("'invites'").color(NamedTextColor.AQUA)));
+
+        player.sendMessage(Component.text("▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬")
+                .color(NamedTextColor.GOLD));
+        player.sendMessage(Component.text(""));
     }
 
     private boolean hasAdminGroups(Player player) {
@@ -376,10 +512,21 @@ public class GroupCommandHandler implements CommandExecutor, TabCompleter {
 
             UUID groupId = UUID.fromString(group.getString("groupId"));
 
-            // Store message for web sync, which idk when I will implement todo
+            // store message for web sync
             groupManager.storeGroupMessage(groupId, player.getUniqueId(), player.getName(), message, "minecraft");
 
-            // Format and send message to all group members
+            // broadcast to web clients
+            if (plugin.getWebAPIHandler() != null) {
+                plugin.getWebAPIHandler().broadcastMinecraftMessage(
+                    player.getUniqueId(),
+                    player.getName(),
+                    message,
+                    "group_message",
+                    groupId
+                );
+            }
+
+            // format and send message to all group members
             String format = plugin.getConfig().getString("chat-groups.format",
                     "&7[&aGroup: &b{group}&7] &f{player}&7: &f{message}");
             String formattedMessage = format
@@ -390,7 +537,6 @@ public class GroupCommandHandler implements CommandExecutor, TabCompleter {
             Component messageComponent = Component.text(formattedMessage.replace("&", "§"));
 
             Bukkit.getScheduler().runTask(plugin, () -> {
-                // Send to all online group members
                 List<Document> members = group.getList("members", Document.class);
                 for (Document member : members) {
                     String memberName = member.getString("playerName");
@@ -1217,13 +1363,12 @@ public class GroupCommandHandler implements CommandExecutor, TabCompleter {
     }
 
     private boolean handleMotd(Player player, String[] args) {
-        if (args.length < 3) {
-            player.sendMessage(Component.text("Usage: /group motd <group> <message>").color(NamedTextColor.RED));
+        if (args.length < 2) {
+            player.sendMessage(Component.text("Usage: /group motd <group> [message]").color(NamedTextColor.RED));
             return true;
         }
 
         String groupName = args[1];
-        String motd = String.join(" ", Arrays.copyOfRange(args, 2, args.length));
 
         GroupInfo group = groupManager.getGroupByName(groupName);
         if (group == null) {
@@ -1232,12 +1377,36 @@ public class GroupCommandHandler implements CommandExecutor, TabCompleter {
         }
 
         if (!groupManager.isAdminOrOwner(group.getGroupId(), player.getUniqueId())) {
-            player.sendMessage(Component.text("You don't have permission to set MOTD!").color(NamedTextColor.RED));
+            player.sendMessage(Component.text("You don't have permission to manage MOTD!").color(NamedTextColor.RED));
             return true;
         }
 
-        // todo: implementation would need to be added to GroupManager
-        player.sendMessage(Component.text("MOTD updated!").color(NamedTextColor.GREEN));
+        if (args.length == 2) {
+            // Show current MOTD
+            String currentMotd = group.getSettings().getGroupMotd();
+            if (currentMotd == null || currentMotd.isEmpty()) {
+                player.sendMessage(Component.text("No MOTD set for this group.").color(NamedTextColor.GRAY));
+            } else {
+                player.sendMessage(Component.text("Current MOTD: ").color(NamedTextColor.YELLOW)
+                        .append(Component.text(currentMotd).color(NamedTextColor.WHITE)));
+            }
+            return true;
+        }
+
+        String motd = String.join(" ", Arrays.copyOfRange(args, 2, args.length));
+
+        boolean success = groupManager.updateGroupMotd(group.getGroupId(), motd);
+        if (success) {
+            player.sendMessage(Component.text("MOTD updated successfully!").color(NamedTextColor.GREEN));
+
+            // Broadcast MOTD change to group members
+            groupManager.broadcastToGroup(group.getGroupId(),
+                    GroupMessage.createSystemMessage(group.getGroupId(),
+                            "Group MOTD updated by " + player.getName() + ": " + motd));
+        } else {
+            player.sendMessage(Component.text("Failed to update MOTD.").color(NamedTextColor.RED));
+        }
+
         return true;
     }
 
@@ -1528,6 +1697,7 @@ public class GroupCommandHandler implements CommandExecutor, TabCompleter {
                 mutedMembers,
                 bannedMembers,
                 groupMotd,
+                new ArrayList<>(), // announcements
                 inviteCode
             );
         } catch (Exception e) {
