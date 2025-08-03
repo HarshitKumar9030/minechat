@@ -22,6 +22,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.ArrayList;
+import com.google.gson.JsonElement;
 import java.util.UUID;
 import java.util.concurrent.Executors;
 
@@ -1490,49 +1492,64 @@ public class EmbeddedWebServer {
 
             if ("POST".equals(exchange.getRequestMethod())) {
                 try {
-                    InputStream inputStream = exchange.getRequestBody();
-                    String requestBody = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
-                    
-                    Map<String, Object> requestData = gson.fromJson(requestBody, Map.class);
-                    
-                    String groupId = (String) requestData.get("groupId");
-                    String groupName = (String) requestData.get("groupName");
-                    String description = (String) requestData.get("description");
-                    Double maxMembersDouble = (Double) requestData.get("maxMembers");
-                    Boolean isPrivate = (Boolean) requestData.get("isPrivate");
-                    String motd = (String) requestData.get("motd");
-                    List<String> announcements = (List<String>) requestData.get("announcements");
-                    
+                    String requestBody = readRequestBody(exchange);
+                    JsonObject json = gson.fromJson(requestBody, JsonObject.class);
+
+                    String groupId = json.has("groupId") && !json.get("groupId").isJsonNull() ? json.get("groupId").getAsString() : null;
+                    String groupName = json.has("groupName") && !json.get("groupName").isJsonNull() ? json.get("groupName").getAsString() : null;
+                    String description = json.has("description") && !json.get("description").isJsonNull() ? json.get("description").getAsString() : null;
+                    Integer maxMembers = null;
+                    if (json.has("maxMembers") && !json.get("maxMembers").isJsonNull()) {
+                        try {
+                            maxMembers = json.get("maxMembers").getAsInt();
+                        } catch (Exception e) {
+                            try { maxMembers = (int) json.get("maxMembers").getAsDouble(); } catch (Exception ignored) {}
+                        }
+                    }
+                    Boolean isPrivate = json.has("isPrivate") && !json.get("isPrivate").isJsonNull() ? json.get("isPrivate").getAsBoolean() : null;
+                    String motd = json.has("motd") && !json.get("motd").isJsonNull() ? json.get("motd").getAsString() : null;
+
+                    List<String> announcements = null;
+                    if (json.has("announcements") && !json.get("announcements").isJsonNull()) {
+                        announcements = new ArrayList<>();
+                        JsonElement annElem = json.get("announcements");
+                        if (annElem.isJsonArray()) {
+                            for (JsonElement elem : annElem.getAsJsonArray()) {
+                                if (!elem.isJsonNull()) announcements.add(elem.getAsString());
+                            }
+                        }
+                    }
+
                     if (groupId == null) {
                         sendErrorResponse(exchange, "Group ID is required", 400);
                         return;
                     }
-                    
+
                     UUID groupUUID = UUID.fromString(groupId);
-                    
+
                     boolean success = groupManager.updateGroupInfo(
-                        groupUUID, 
-                        groupName, 
-                        description, 
-                        maxMembersDouble != null ? maxMembersDouble.intValue() : null,
+                        groupUUID,
+                        groupName,
+                        description,
+                        maxMembers,
                         isPrivate
                     );
-                    
+
                     if (motd != null && success) {
                         success = groupManager.updateGroupMotd(groupUUID, motd);
                     }
-                    
+
                     if (announcements != null && success) {
                         success = groupManager.updateGroupAnnouncements(groupUUID, announcements);
                     }
-                    
+
                     if (success) {
                         Map<String, Object> response = Map.of("success", true, "message", "Group updated successfully");
                         sendJsonResponse(exchange, response, 200);
                     } else {
                         sendErrorResponse(exchange, "Failed to update group", 500);
                     }
-                    
+
                 } catch (Exception e) {
                     e.printStackTrace();
                     sendErrorResponse(exchange, "Invalid request format", 400);
