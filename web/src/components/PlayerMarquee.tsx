@@ -23,9 +23,9 @@ export default function PlayerMarquee() {
       } catch (error) {
         console.error('Failed to fetch online players:', error);
         setPlayers([
-          { playerName: 'Steve', playerUUID: '', rank: '[Player]', formattedRank: '§7[Player]', online: true },
-          { playerName: 'Alex', playerUUID: '', rank: '[VIP]', formattedRank: '§6[VIP]', online: true },
-          { playerName: 'Admin', playerUUID: '', rank: '[ADMIN]', formattedRank: '§c[ADMIN]', online: true },
+          { playerName: 'Steve', playerUUID: '8667ba71-b85a-4004-af54-457a9734eed7', rank: '[Player]', formattedRank: '§7[Player]', online: true },
+          { playerName: 'Alex', playerUUID: '8667ba71-b85a-4004-af54-457a9734eed8', rank: '[VIP]', formattedRank: '§6[VIP]', online: true },
+          { playerName: 'Admin', playerUUID: '8667ba71-b85a-4004-af54-457a9734eed9', rank: '[ADMIN]', formattedRank: '§c[ADMIN]', online: true },
         ]);
       } finally {
         setLoading(false);
