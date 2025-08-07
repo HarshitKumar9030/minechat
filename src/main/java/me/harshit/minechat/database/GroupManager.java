@@ -144,9 +144,7 @@ public class GroupManager {
                 return false;
             }
 
-            // can't leave if you're the owner
-            String ownerId = group.getString("ownerId");
-            if (ownerId != null && ownerId.equals(playerId.toString())) {
+            if (group.getString("ownerId").equals(playerId.toString())) {
                 return false;
             }
 
@@ -166,6 +164,9 @@ public class GroupManager {
 
 
     public void storeGroupMessage(UUID groupId, UUID senderId, String senderName, String message, String source) {
+      
+        
+        /*
         try {
             Document messageDoc = new Document()
                     .append("groupId", groupId.toString())
@@ -181,10 +182,16 @@ public class GroupManager {
         } catch (Exception e) {
             plugin.getLogger().warning("Failed to store group message: " + e.getMessage());
         }
+        */
     }
 
 
     public List<Document> getGroupMessages(UUID groupId, int limit) {
+        // DISABLED: We don't want to store or retrieve group messages
+        // Messages are only sent in real-time via WebSocket
+        return new ArrayList<>();
+        
+        /*
         try {
             List<Document> messages = new ArrayList<>();
             groupMessagesCollection.find(new Document("groupId", groupId.toString()))
@@ -196,6 +203,7 @@ public class GroupManager {
             plugin.getLogger().warning("Failed to get group messages: " + e.getMessage());
             return new ArrayList<>();
         }
+        */
     }
 
 
@@ -264,34 +272,33 @@ public class GroupManager {
 
     public boolean joinGroup(UUID groupId, UUID playerUUID, String playerName) {
         try {
+            plugin.getLogger().info("Attempting to join group " + groupId + " with player " + playerName + " (" + playerUUID + ")");
             Document group = groupsCollection.find(new Document("groupId", groupId.toString())).first();
             if (group == null) {
+                plugin.getLogger().warning("Group not found: " + groupId);
                 return false; // Group doesn't exist
             }
 
             // Check if player is already a member
             List<Document> members = group.getList("members", Document.class);
             boolean alreadyMember = members.stream()
-                    .anyMatch(member -> {
-                        String memberUUID = member.getString("playerId");
-                        return memberUUID != null && memberUUID.equals(playerUUID.toString());
-                    });
+                    .anyMatch(member -> member.getString("playerId").equals(playerUUID.toString()));
 
             if (alreadyMember) {
+                plugin.getLogger().warning("Player " + playerName + " is already a member of group " + groupId);
                 return false; // Already a member
             }
 
-            // Check member limit
             int maxMembers = group.getInteger("maxMembers", 25);
             if (members.size() >= maxMembers) {
+                plugin.getLogger().warning("Group " + groupId + " is full (" + members.size() + "/" + maxMembers + ")");
                 return false; // Group is full
             }
 
-            // Add player to group
             Document newMember = new Document()
                     .append("playerId", playerUUID.toString())
                     .append("playerName", playerName)
-                    .append("role", "member")
+                    .append("role", "MEMBER")
                     .append("joinedDate", System.currentTimeMillis());
 
             groupsCollection.updateOne(
@@ -299,6 +306,7 @@ public class GroupManager {
                     new Document("$push", new Document("members", newMember))
             );
 
+            plugin.getLogger().info("Successfully added player " + playerName + " to group " + groupId);
             return true;
 
         } catch (Exception e) {
@@ -314,19 +322,16 @@ public class GroupManager {
                 return false;
             }
 
-            String ownerId = group.getString("ownerId");
-            if (ownerId != null && ownerId.equals(playerUUID.toString())) {
+            if (group.getString("ownerId").equals(playerUUID.toString())) {
                 return true;
             }
 
             List<Document> members = group.getList("members", Document.class);
             return members.stream()
-                    .anyMatch(member -> {
-                        String memberUUID = member.getString("playerId");
-                        String role = member.getString("role");
-                        return memberUUID != null && memberUUID.equals(playerUUID.toString()) &&
-                                role != null && ("ADMIN".equals(role) || "OWNER".equals(role));
-                    });
+                    .anyMatch(member ->
+                            member.getString("playerId").equals(playerUUID.toString()) &&
+                                    ("ADMIN".equals(member.getString("role")) || "OWNER".equals(member.getString("role")))
+                    );
 
         } catch (Exception e) {
             plugin.getLogger().warning("Failed to check admin/owner status: " + e.getMessage());
@@ -341,8 +346,7 @@ public class GroupManager {
             }
 
             Document group = getGroup(groupId);
-            String ownerId = group != null ? group.getString("ownerId") : null;
-            if (group == null || (ownerId != null && ownerId.equals(targetId.toString()))) {
+            if (group == null || group.getString("ownerId").equals(targetId.toString())) {
                 return false;
             }
 
@@ -385,13 +389,11 @@ public class GroupManager {
 
     public UUID getPlayerUUID(String playerName) {
         try {
-            // try to get from online players first
             org.bukkit.entity.Player player = org.bukkit.Bukkit.getPlayerExact(playerName);
             if (player != null) {
                 return player.getUniqueId();
             }
 
-            // try to get from offline players
             org.bukkit.OfflinePlayer offlinePlayer = org.bukkit.Bukkit.getOfflinePlayer(playerName);
             if (offlinePlayer.hasPlayedBefore()) {
                 return offlinePlayer.getUniqueId();
@@ -432,53 +434,6 @@ public class GroupManager {
         }
     }
 
-    public boolean updateGroupAnnouncements(UUID groupId, List<String> announcements) {
-        try {
-            long modifiedCount = groupsCollection.updateOne(
-                    new Document("groupId", groupId.toString()),
-                    new Document("$set", new Document("settings.announcements", announcements))
-            ).getModifiedCount();
-
-            return modifiedCount > 0;
-        } catch (Exception e) {
-            plugin.getLogger().warning("Failed to update group announcements: " + e.getMessage());
-            return false;
-        }
-    }
-
-    public boolean updateGroupInfo(UUID groupId, String groupName, String description, Integer maxMembers, Boolean isPrivate) {
-        try {
-            Document updateDoc = new Document();
-            
-            if (groupName != null) {
-                updateDoc.append("groupName", groupName);
-            }
-            if (description != null) {
-                updateDoc.append("description", description);
-            }
-            if (maxMembers != null) {
-                updateDoc.append("maxMembers", maxMembers);
-            }
-            if (isPrivate != null) {
-                updateDoc.append("isPrivate", isPrivate);
-            }
-            
-            if (updateDoc.isEmpty()) {
-                return false; // Nothing to update
-            }
-            
-            long modifiedCount = groupsCollection.updateOne(
-                    new Document("groupId", groupId.toString()),
-                    new Document("$set", updateDoc)
-            ).getModifiedCount();
-
-            return modifiedCount > 0;
-        } catch (Exception e) {
-            plugin.getLogger().warning("Failed to update group info: " + e.getMessage());
-            return false;
-        }
-    }
-
     public boolean muteMember(UUID groupId, UUID targetId, UUID adminId, int durationMinutes) {
         try {
             if (!isAdminOrOwner(groupId, adminId)) {
@@ -490,7 +445,6 @@ public class GroupManager {
                 return false;
             }
 
-            // check if target is admin/owner (can't mute equal or higher rank)
             if (isAdminOrOwner(groupId, targetId)) {
                 return false;
             }
@@ -607,29 +561,7 @@ public class GroupManager {
         }
     }
 
-    public boolean demoteMember(UUID groupId, UUID targetId, UUID adminId) {
-        try {
-            if (!isGroupOwner(groupId, adminId)) {
-                return false; // Only owner can demote
-            }
 
-            Document group = getGroup(groupId);
-            if (group == null || group.getString("ownerId").equals(targetId.toString())) {
-                return false; // Can't demote the owner
-            }
-
-            long modifiedCount = groupsCollection.updateOne(
-                    new Document("groupId", groupId.toString())
-                            .append("members.playerId", targetId.toString()),
-                    new Document("$set", new Document("members.$.role", "MEMBER"))
-            ).getModifiedCount();
-
-            return modifiedCount > 0;
-        } catch (Exception e) {
-            plugin.getLogger().warning("Failed to demote member: " + e.getMessage());
-            return false;
-        }
-    }
 
     public boolean promoteGroupMember(UUID groupId, UUID targetId) {
         try {
@@ -683,7 +615,7 @@ public class GroupManager {
         try {
             Document group = getGroup(groupId);
             if (group == null || !group.getString("ownerId").equals(ownerId.toString())) {
-                return false; // Only owner can delete
+                return false; 
             }
 
             groupMessagesCollection.deleteMany(new Document("groupId", groupId.toString()));
@@ -723,40 +655,9 @@ public class GroupManager {
         }
     }
 
-    // Methods that return API objects for GroupCommandHandler compatibility
 
     public GroupInfo createGroup(String groupName, String description, UUID ownerId, String ownerName, int maxMembers) {
-        try {
-            if (groupExists(groupName)) {
-                return null;
-            }
-
-            UUID groupId = UUID.randomUUID();
-            long timestamp = System.currentTimeMillis();
-            String inviteCode = generateInviteCode();
-
-            Document settingsDoc = getDefaultSettingsDocument()
-                    .append("inviteCode", inviteCode);
-
-            Document groupDoc = new Document()
-                    .append("groupId", groupId.toString())
-                    .append("groupName", groupName)
-                    .append("description", description)
-                    .append("ownerId", ownerId.toString())
-                    .append("ownerName", ownerName)
-                    .append("isPrivate", false)
-                    .append("createdDate", timestamp)
-                    .append("maxMembers", maxMembers)
-                    .append("settings", settingsDoc)
-                    .append("members", List.of(createOwnerMemberDocument(ownerId, ownerName, timestamp)));
-
-            groupsCollection.insertOne(groupDoc);
-
-            return convertDocumentToGroupInfo(groupDoc);
-        } catch (Exception e) {
-            plugin.getLogger().warning("Failed to create group: " + e.getMessage());
-            return null;
-        }
+        return createGroup(ownerId, ownerName, groupName, description, maxMembers, false);
     }
 
     public GroupInfo getGroupByName(String groupName) {
@@ -775,6 +676,15 @@ public class GroupManager {
             return convertDocumentToGroupInfo(groupDoc);
         } catch (Exception e) {
             plugin.getLogger().warning("Failed to get group by invite code: " + e.getMessage());
+            return null;
+        }
+    }
+
+    public Document getGroupDocumentByInviteCode(String inviteCode) {
+        try {
+            return groupsCollection.find(new Document("settings.inviteCode", inviteCode)).first();
+        } catch (Exception e) {
+            plugin.getLogger().warning("Failed to get group document by invite code: " + e.getMessage());
             return null;
         }
     }
@@ -939,12 +849,10 @@ public class GroupManager {
             String joinMessage = doc.getString("joinMessage");
             String leaveMessage = doc.getString("leaveMessage");
             String groupMotd = doc.getString("groupMotd");
-            List<String> announcements = doc.getList("announcements", String.class);
 
             if (joinMessage == null) joinMessage = "Welcome to the group!";
             if (leaveMessage == null) leaveMessage = "Thanks for being part of the group!";
             if (groupMotd == null) groupMotd = "";
-            if (announcements == null) announcements = new ArrayList<>();
             if (inviteCode == null) inviteCode = generateInviteCode();
 
             List<String> allowedRanks = doc.getList("allowedRanks", String.class);
@@ -990,7 +898,6 @@ public class GroupManager {
                 mutedMembers,
                 bannedMembers,
                 groupMotd,
-                announcements,
                 inviteCode
             );
         } catch (Exception e) {
@@ -1010,7 +917,6 @@ public class GroupManager {
 
     public boolean banPlayerFromGroup(UUID groupId, UUID playerId) {
         try {
-            // remove from members and add to banned list
             groupsCollection.updateOne(
                     new Document("groupId", groupId.toString()),
                     new Document("$pull", new Document("members", new Document("playerId", playerId.toString())))
@@ -1055,13 +961,18 @@ public class GroupManager {
 
     public boolean joinGroupByInviteCode(UUID playerId, String playerName, String inviteCode) {
         try {
+            plugin.getLogger().info("Attempting to join group with invite code: " + inviteCode);
             Document group = groupsCollection.find(new Document("settings.inviteCode", inviteCode)).first();
             if (group == null) {
+                plugin.getLogger().warning("No group found with invite code: " + inviteCode);
                 return false;
             }
 
+            plugin.getLogger().info("Found group: " + group.getString("groupName") + " for invite code: " + inviteCode);
             UUID groupId = UUID.fromString(group.getString("groupId"));
-            return joinGroup(groupId, playerId, playerName);
+            boolean result = joinGroup(groupId, playerId, playerName);
+            plugin.getLogger().info("Join group result: " + result + " for player: " + playerName);
+            return result;
         } catch (Exception e) {
             plugin.getLogger().warning("Failed to join group by invite code: " + e.getMessage());
             return false;
@@ -1134,91 +1045,319 @@ public class GroupManager {
         }
     }
 
+
     public List<Document> getAllPublicGroups() {
         try {
-            List<Document> publicGroups = new ArrayList<>();
-            Document filter = new Document("isPrivate", false);
-            
-            for (Document groupDoc : groupsCollection.find(filter).limit(20)) {
-                Document publicGroup = new Document()
-                        .append("groupId", groupDoc.getString("groupId"))
-                        .append("groupName", groupDoc.getString("groupName"))
-                        .append("description", groupDoc.getString("description"))
-                        .append("memberCount", getMemberCount(groupDoc))
-                        .append("maxMembers", groupDoc.getInteger("maxMembers", 20))
-                        .append("ownerId", groupDoc.getString("ownerId"))
-                        .append("ownerName", groupDoc.getString("ownerName"))
-                        .append("createdAt", groupDoc.getLong("createdDate"))
-                        .append("isPrivate", false);
-                publicGroups.add(publicGroup);
+            List<Document> groups = new ArrayList<>();
+            groupsCollection.find(new Document("isPrivate", false)).into(groups);
+
+            for (Document group : groups) {
+                List<Document> members = group.getList("members", Document.class);
+                group.append("memberCount", members != null ? members.size() : 0);
             }
-            return publicGroups;
+
+            return groups;
         } catch (Exception e) {
-            plugin.getLogger().warning("Failed to get public groups: " + e.getMessage());
+            plugin.getLogger().warning("Failed to get all public groups: " + e.getMessage());
             return new ArrayList<>();
         }
     }
 
     public List<Document> getTrendingGroups() {
         try {
-            List<Document> trendingGroups = new ArrayList<>();
-            Document filter = new Document("isPrivate", false);
-            
-            for (Document groupDoc : groupsCollection.find(filter).limit(10)) {
-                int memberCount = getMemberCount(groupDoc);
-                if (memberCount >= 3) { 
-                    Document trendingGroup = new Document()
-                            .append("groupId", groupDoc.getString("groupId"))
-                            .append("groupName", groupDoc.getString("groupName"))
-                            .append("description", groupDoc.getString("description"))
-                            .append("memberCount", memberCount)
-                            .append("maxMembers", groupDoc.getInteger("maxMembers", 20))
-                            .append("ownerId", groupDoc.getString("ownerId"))
-                            .append("ownerName", groupDoc.getString("ownerName"))
-                            .append("createdAt", groupDoc.getLong("createdDate"))
-                            .append("isPrivate", false);
-                    trendingGroups.add(trendingGroup);
-                }
+            List<Document> groups = new ArrayList<>();
+
+            long weekAgo = System.currentTimeMillis() - (7 * 24 * 60 * 60 * 1000);
+
+            // For now, return most active public groups based on member count
+            // TODO: Implement proper trending algorithm based on message activity
+            groupsCollection.find(new Document("isPrivate", false))
+                .sort(new Document("createdDate", -1))
+                .limit(10)
+                .into(groups);
+
+            for (Document group : groups) {
+                List<Document> members = group.getList("members", Document.class);
+                group.append("memberCount", members != null ? members.size() : 0);
             }
-            return trendingGroups;
+
+            return groups;
         } catch (Exception e) {
             plugin.getLogger().warning("Failed to get trending groups: " + e.getMessage());
             return new ArrayList<>();
         }
     }
 
-    public List<Document> getRecommendedGroups(UUID playerUUID) {
+    public List<Document> getRecommendedGroups(UUID playerId) {
         try {
-            List<Document> recommendedGroups = new ArrayList<>();
+            List<Document> groups = new ArrayList<>();
+
+            List<Document> playerGroups = getPlayerGroupsAsDocuments(playerId);
+            List<String> playerGroupIds = playerGroups.stream()
+                .map(g -> g.getString("groupId"))
+                .toList();
+
             Document filter = new Document("isPrivate", false);
-            
-            for (Document groupDoc : groupsCollection.find(filter).limit(15)) {
-                UUID groupId = UUID.fromString(groupDoc.getString("groupId"));
-                GroupMember member = getGroupMember(groupId, playerUUID);
-                
-                if (member == null) { 
-                    Document recommendedGroup = new Document()
-                            .append("groupId", groupDoc.getString("groupId"))
-                            .append("groupName", groupDoc.getString("groupName"))
-                            .append("description", groupDoc.getString("description"))
-                            .append("memberCount", getMemberCount(groupDoc))
-                            .append("maxMembers", groupDoc.getInteger("maxMembers", 20))
-                            .append("ownerId", groupDoc.getString("ownerId"))
-                            .append("ownerName", groupDoc.getString("ownerName"))
-                            .append("createdAt", groupDoc.getLong("createdDate"))
-                            .append("isPrivate", false);
-                    recommendedGroups.add(recommendedGroup);
-                }
+            if (!playerGroupIds.isEmpty()) {
+                filter.append("groupId", new Document("$nin", playerGroupIds));
             }
-            return recommendedGroups;
+
+            groupsCollection.find(filter)
+                .sort(new Document("createdDate", -1))
+                .limit(5)
+                .into(groups);
+
+            for (Document group : groups) {
+                List<Document> members = group.getList("members", Document.class);
+                group.append("memberCount", members != null ? members.size() : 0);
+            }
+
+            return groups;
         } catch (Exception e) {
             plugin.getLogger().warning("Failed to get recommended groups: " + e.getMessage());
             return new ArrayList<>();
         }
     }
 
-    private int getMemberCount(Document groupDoc) {
-        List<Document> members = (List<Document>) groupDoc.get("members");
-        return members != null ? members.size() : 0;
+    public boolean updateGroupInfo(UUID groupId, String groupName, String description, Integer maxMembers, Boolean isPrivate) {
+        try {
+            Document updateDoc = new Document();
+
+            if (groupName != null && !groupName.trim().isEmpty()) {
+                updateDoc.append("groupName", groupName.trim());
+            }
+
+            if (description != null) {
+                updateDoc.append("description", description);
+            }
+
+            if (maxMembers != null && maxMembers > 0) {
+                updateDoc.append("maxMembers", maxMembers);
+            }
+
+            if (isPrivate != null) {
+                updateDoc.append("isPrivate", isPrivate);
+            }
+
+            if (updateDoc.isEmpty()) {
+                return false; 
+            }
+
+            updateDoc.append("lastUpdated", System.currentTimeMillis());
+
+            long modifiedCount = groupsCollection.updateOne(
+                new Document("groupId", groupId.toString()),
+                new Document("$set", updateDoc)
+            ).getModifiedCount();
+
+            return modifiedCount > 0;
+        } catch (Exception e) {
+            plugin.getLogger().warning("Failed to update group info: " + e.getMessage());
+            return false;
+        }
+    }
+
+    public boolean updateGroupAnnouncements(UUID groupId, List<String> announcements) {
+        try {
+            if (announcements == null) {
+                announcements = new ArrayList<>();
+            }
+
+            long modifiedCount = groupsCollection.updateOne(
+                new Document("groupId", groupId.toString()),
+                new Document("$set", new Document("settings.announcements", announcements))
+            ).getModifiedCount();
+
+            return modifiedCount > 0;
+        } catch (Exception e) {
+            plugin.getLogger().warning("Failed to update group announcements: " + e.getMessage());
+            return false;
+        }
+    }
+
+    public boolean banMember(UUID groupId, UUID memberId, UUID adminId) {
+        try {
+            boolean removed = removeMember(groupId, memberId);
+            if (!removed) {
+                return false;
+            }
+
+            long modifiedCount = groupsCollection.updateOne(
+                new Document("groupId", groupId.toString()),
+                new Document("$addToSet", new Document("bannedMembers", memberId.toString()))
+            ).getModifiedCount();
+
+            return modifiedCount > 0;
+        } catch (Exception e) {
+            plugin.getLogger().warning("Failed to ban member: " + e.getMessage());
+            return false;
+        }
+    }
+
+    public boolean muteMember(UUID groupId, UUID memberId, UUID adminId, long durationMinutes) {
+        try {
+            long muteUntil = System.currentTimeMillis() + (durationMinutes * 60 * 1000);
+            
+            long modifiedCount = groupsCollection.updateOne(
+                new Document("groupId", groupId.toString())
+                    .append("members.playerId", memberId.toString()),
+                new Document("$set", new Document("members.$.muteUntil", muteUntil))
+            ).getModifiedCount();
+
+            return modifiedCount > 0;
+        } catch (Exception e) {
+            plugin.getLogger().warning("Failed to mute member: " + e.getMessage());
+            return false;
+        }
+    }
+
+    public boolean promoteMember(UUID groupId, UUID memberId, UUID adminId) {
+        try {
+            long modifiedCount = groupsCollection.updateOne(
+                new Document("groupId", groupId.toString())
+                    .append("members.playerId", memberId.toString()),
+                new Document("$set", new Document("members.$.role", "admin"))
+            ).getModifiedCount();
+
+            return modifiedCount > 0;
+        } catch (Exception e) {
+            plugin.getLogger().warning("Failed to promote member: " + e.getMessage());
+            return false;
+        }
+    }
+
+    public boolean demoteMember(UUID groupId, UUID targetId, UUID adminId) {
+        try {
+            if (!isGroupOwner(groupId, adminId)) {
+                return false;
+            }
+
+            Document group = getGroup(groupId);
+            if (group == null || group.getString("ownerId").equals(targetId.toString())) {
+                return false;
+            }
+
+            long modifiedCount = groupsCollection.updateOne(
+                    new Document("groupId", groupId.toString())
+                            .append("members.playerId", targetId.toString()),
+                    new Document("$set", new Document("members.$.role", "MEMBER"))
+            ).getModifiedCount();
+
+            return modifiedCount > 0;
+        } catch (Exception e) {
+            plugin.getLogger().warning("Failed to demote member: " + e.getMessage());
+            return false;
+        }
+    }
+
+    public boolean updateGroupMOTD(UUID groupId, String motd) {
+        try {
+            if (motd == null) {
+                motd = "";
+            }
+
+            long modifiedCount = groupsCollection.updateOne(
+                new Document("groupId", groupId.toString()),
+                new Document("$set", new Document("settings.motd", motd))
+            ).getModifiedCount();
+
+            return modifiedCount > 0;
+        } catch (Exception e) {
+            plugin.getLogger().warning("Failed to update group MOTD: " + e.getMessage());
+            return false;
+        }
+    }
+
+    public boolean isPlayerBanned(UUID groupId, UUID playerId) {
+        try {
+            Document group = groupsCollection.find(new Document("groupId", groupId.toString())).first();
+            if (group == null) {
+                return false;
+            }
+
+            List<String> bannedMembers = group.getList("bannedMembers", String.class);
+            return bannedMembers != null && bannedMembers.contains(playerId.toString());
+        } catch (Exception e) {
+            plugin.getLogger().warning("Failed to check if player is banned: " + e.getMessage());
+            return false;
+        }
+    }
+
+    public boolean removeMember(UUID groupId, UUID memberId) {
+        try {
+            long modifiedCount = groupsCollection.updateOne(
+                new Document("groupId", groupId.toString()),
+                new Document("$pull", new Document("members", new Document("playerId", memberId.toString())))
+            ).getModifiedCount();
+
+            return modifiedCount > 0;
+        } catch (Exception e) {
+            plugin.getLogger().warning("Failed to remove member: " + e.getMessage());
+            return false;
+        }
+    }
+
+    public List<Document> getGroupInvites(UUID playerUUID) {
+        try {
+            List<Document> invites = new ArrayList<>();
+            groupInvitesCollection.find(
+                new Document("targetId", playerUUID.toString())
+                    .append("status", "pending")
+            ).into(invites);
+            return invites;
+        } catch (Exception e) {
+            plugin.getLogger().warning("Failed to get group invites: " + e.getMessage());
+            return new ArrayList<>();
+        }
+    }
+
+    public boolean acceptGroupInviteById(String inviteId, UUID playerUUID) {
+        try {
+            Document invite = groupInvitesCollection.find(
+                new Document("inviteId", inviteId)
+                    .append("targetId", playerUUID.toString())
+                    .append("status", "pending")
+            ).first();
+            
+            if (invite == null) {
+                return false;
+            }
+            
+            String groupIdStr = invite.getString("groupId");
+            UUID groupId = UUID.fromString(groupIdStr);
+            
+            boolean joinSuccess = joinGroup(groupId, playerUUID, invite.getString("targetName"));
+            
+            if (joinSuccess) {
+                groupInvitesCollection.updateOne(
+                    new Document("inviteId", inviteId),
+                    new Document("$set", new Document("status", "accepted")
+                        .append("processedAt", System.currentTimeMillis()))
+                );
+                return true;
+            }
+            
+            return false;
+        } catch (Exception e) {
+            plugin.getLogger().warning("Failed to accept group invite: " + e.getMessage());
+            return false;
+        }
+    }
+
+    public boolean rejectGroupInviteById(String inviteId, UUID playerUUID) {
+        try {
+            long modifiedCount = groupInvitesCollection.updateOne(
+                new Document("inviteId", inviteId)
+                    .append("targetId", playerUUID.toString())
+                    .append("status", "pending"),
+                new Document("$set", new Document("status", "rejected")
+                    .append("processedAt", System.currentTimeMillis()))
+            ).getModifiedCount();
+            
+            return modifiedCount > 0;
+        } catch (Exception e) {
+            plugin.getLogger().warning("Failed to reject group invite: " + e.getMessage());
+            return false;
+        }
     }
 }

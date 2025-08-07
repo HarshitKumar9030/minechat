@@ -61,7 +61,7 @@ public final class Minechat extends JavaPlugin {
             webAPIHandler = new me.harshit.minechat.web.WebAPIHandler(this, userDataManager, friendManager, groupManager);
 
             if (getConfig().getBoolean("web.enable-api", true)) {
-                webServer = new EmbeddedWebServer(this, userDataManager, friendManager, groupManager);
+                webServer = new EmbeddedWebServer(this, databaseManager, userDataManager, friendManager, groupManager);
                 webServer.start();
             }
 
@@ -75,17 +75,14 @@ public final class Minechat extends JavaPlugin {
             getLogger().severe("Plugin will still work but messages won't be saved to database.");
         }
 
-        // Initialize chat listener with rank manager
         chatListener = new ChatListener(this, databaseManager, rankManager);
 
         playerDataListener = new PlayerDataListener(this, userDataManager);
 
-        // Initialize command handlers
         commandHandler = new ChatCommandHandler(this, databaseManager, userDataManager, friendManager);
         friendCommandHandler = new FriendCommandHandler(this, friendManager, userDataManager);
         groupCommandHandler = new GroupCommandHandler(this, groupManager);
 
-        // Register event listeners
         getServer().getPluginManager().registerEvents(chatListener, this);
         getServer().getPluginManager().registerEvents(playerDataListener, this);
 
@@ -93,7 +90,6 @@ public final class Minechat extends JavaPlugin {
 
         registerAPIService();
 
-        // Success message
         getLogger().info("✓ MineChat enabled successfully!");
 
         // if not available log else dont spam the console
@@ -102,7 +98,6 @@ public final class Minechat extends JavaPlugin {
 
         }
 
-        // Notify online players that the plugin is active
         getServer().broadcast(Component.text("MineChat is now active!")
                 .color(NamedTextColor.GREEN));
     }
@@ -123,7 +118,6 @@ public final class Minechat extends JavaPlugin {
             webAPIHandler.shutdown();
         }
 
-        // Disconnect from database
         if (databaseManager != null) {
             databaseManager.disconnect();
         }
@@ -131,7 +125,6 @@ public final class Minechat extends JavaPlugin {
         getLogger().info("✓ MineChat disabled successfully!");
     }
 
-    // register all the plugin commands
     private void registerCommands() {
         // reg main command
         getCommand("minechat").setExecutor(commandHandler);
@@ -167,7 +160,6 @@ public final class Minechat extends JavaPlugin {
         return friendAPI;
     }
 
-    // @return DatabaseManager instance
     public DatabaseManager getDatabaseManager() {
         return databaseManager;
     }

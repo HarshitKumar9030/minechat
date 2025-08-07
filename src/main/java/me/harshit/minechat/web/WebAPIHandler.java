@@ -51,9 +51,6 @@ public class WebAPIHandler {
             return;
         }
 
-        if (!"group_message".equals(messageType) && !"friend_message".equals(messageType)) {
-            plugin.getLogger().fine("Handling web message: " + messageType + " from session: " + sessionId);
-        }
 
         switch (messageType.toLowerCase()) {
             case "friend_message":
@@ -205,42 +202,84 @@ public class WebAPIHandler {
     }
 
     private void handleWebGroupMessage(WebSession session, JsonObject data) {
-        String groupName = data.get("group").getAsString();
-        String message = data.get("message").getAsString();
+        // Handle both groupId and group name formats for backwards compatibility
+        String groupIdStr = data.has("groupId") ? data.get("groupId").getAsString() : null;
+        String groupNameParam = data.has("group") ? data.get("group").getAsString() : null;
+        String message = data.has("content") ? data.get("content").getAsString() :
+                        data.has("message") ? data.get("message").getAsString() : null;
+
+        if (message == null) {
+            sendWebResponse(session.getSessionId(), "error", "Missing message content");
+            return;
+        }
 
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
-            // find the group
-            List<Document> playerGroups = groupManager.getPlayerGroupsAsDocuments(session.getPlayerId());
-            Document group = playerGroups.stream()
-                    .filter(g -> g.getString("groupName").equalsIgnoreCase(groupName))
-                    .findFirst()
-                    .orElse(null);
+            Document foundGroup = null;
+            UUID foundGroupId = null;
+            String finalGroupName = null;
 
-            if (group == null) {
+            if (groupIdStr != null) {
+                // Use groupId to find group directly
+                try {
+                    foundGroupId = UUID.fromString(groupIdStr);
+                    foundGroup = groupManager.getGroup(foundGroupId);
+                    if (foundGroup != null) {
+                        // Verify user is member by checking if they're in the group's member list
+                        List<Document> members = foundGroup.getList("members", Document.class);
+                        boolean isMember = members.stream()
+                            .anyMatch(member -> member.getString("playerId").equals(session.getPlayerId().toString()));
+                        
+                        if (isMember) {
+                            finalGroupName = foundGroup.getString("groupName");
+                        } else {
+                            foundGroup = null; // User is not a member
+                        }
+                    }
+                } catch (IllegalArgumentException e) {
+                    sendWebResponse(session.getSessionId(), "error", "Invalid group ID format");
+                    return;
+                }
+            } else if (groupNameParam != null) {
+                // Find group by name (legacy method)
+                List<Document> playerGroups = groupManager.getPlayerGroupsAsDocuments(session.getPlayerId());
+                foundGroup = playerGroups.stream()
+                        .filter(g -> g.getString("groupName").equalsIgnoreCase(groupNameParam))
+                        .findFirst()
+                        .orElse(null);
+                
+                if (foundGroup != null) {
+                    foundGroupId = UUID.fromString(foundGroup.getString("groupId"));
+                    finalGroupName = foundGroup.getString("groupName");
+                }
+            }
+
+            if (foundGroup == null || foundGroupId == null) {
                 sendWebResponse(session.getSessionId(), "error", "Group not found or you're not a member");
                 return;
             }
 
-            UUID groupId = UUID.fromString(group.getString("groupId"));
-            String messageId = UUID.randomUUID().toString();
-            long timestamp = System.currentTimeMillis();
+            // Create final variables for use in lambda
+            final Document finalGroup = foundGroup;
+            final UUID finalGroupId = foundGroupId;
+            final String groupNameForLambda = finalGroupName;
 
-            // Store message for persistence
-            groupManager.storeGroupMessage(groupId, session.getPlayerId(),
-                                         session.getPlayerName(), message, "web");
+            // Store message for persistence - DISABLED: We don't want to store group messages
+            // groupManager.storeGroupMessage(finalGroupId, session.getPlayerId(),
+            //                              session.getPlayerName(), message, "web");
 
             // Send to all online group members
             Bukkit.getScheduler().runTask(plugin, () -> {
                 String format = plugin.getConfig().getString("chat-groups.format",
                     "&7[&aGroup: &b{group}&7] &f{player}&7: &f{message}");
                 String formattedMessage = format
-                        .replace("{group}", groupName)
+                        .replace("{group}", groupNameForLambda)
                         .replace("{player}", session.getPlayerName() + " (Web)")
                         .replace("{message}", message);
 
                 Component messageComponent = Component.text(formattedMessage.replace("&", "§"));
 
-                List<Document> members = group.getList("members", Document.class);
+                // Get group members and send to online players
+                List<Document> members = finalGroup.getList("members", Document.class);
                 for (Document member : members) {
                     String memberName = member.getString("playerName");
                     Player onlineMember = Bukkit.getPlayerExact(memberName);
@@ -249,29 +288,25 @@ public class WebAPIHandler {
                     }
                 }
 
-                // Create complete message data with ID
-                Map<String, Object> messageData = Map.of(
-                    "messageId", messageId,
-                    "group", groupName,
-                    "groupId", groupId.toString(),
-                    "sender", session.getPlayerName(),
+                // Notify all web sessions in this group
+                broadcastToGroupWebSessions(finalGroupId, "group_message", Map.of(
+                    "group", groupNameForLambda,
+                    "groupId", finalGroupId.toString(),
+                    "messageId", UUID.randomUUID().toString(),
                     "senderUUID", session.getPlayerId().toString(),
                     "senderName", session.getPlayerName(),
-                    "message", message,
                     "content", message,
-                    "timestamp", timestamp,
+                    "timestamp", System.currentTimeMillis(),
+                    "messageType", "TEXT",
                     "source", "web"
-                );
+                ));
 
-                // Broadcast to ALL web sessions in this group (including sender for consistency)
-                broadcastToGroupWebSessions(groupId, "group_message", messageData);
-
-                // Send confirmation to sender
                 sendWebResponse(session.getSessionId(), "message_sent", Map.of(
                     "type", "group_message",
-                    "group", groupName,
+                    "group", groupNameForLambda,
+                    "groupId", finalGroupId.toString(),
                     "message", message,
-                    "timestamp", timestamp
+                    "timestamp", System.currentTimeMillis()
                 ));
             });
         });
@@ -639,20 +674,59 @@ public class WebAPIHandler {
 
     private void handleJoinGroupByCode(WebSession session, JsonObject data) {
         String inviteCode = data.get("inviteCode").getAsString();
+        plugin.getLogger().info("WebSocket: Player " + session.getPlayerName() + " attempting to join group with code: " + inviteCode);
 
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             boolean success = groupManager.joinGroupByInviteCode(session.getPlayerId(),
                 session.getPlayerName(), inviteCode);
+
+            plugin.getLogger().info("WebSocket: Join group by code result: " + success + " for player: " + session.getPlayerName());
 
             if (success) {
                 sendWebResponse(session.getSessionId(), "group_joined", Map.of(
                     "inviteCode", inviteCode,
                     "message", "Successfully joined group"
                 ));
+
+                try {
+                    Document group = groupManager.getGroupDocumentByInviteCode(inviteCode);
+                    if (group != null) {
+                        UUID groupId = UUID.fromString(group.getString("groupId"));
+                        plugin.getLogger().info("WebSocket: Broadcasting member joined for group: " + group.getString("groupName"));
+                        broadcastToGroupMembers(groupId, "member_joined", Map.of(
+                            "playerName", session.getPlayerName(),
+                            "playerId", session.getPlayerId().toString()
+                        ));
+                    }
+                } catch (Exception e) {
+                    plugin.getLogger().warning("Failed to broadcast member joined: " + e.getMessage());
+                }
             } else {
+                plugin.getLogger().warning("WebSocket: Failed to join group with code: " + inviteCode + " for player: " + session.getPlayerName());
                 sendWebResponse(session.getSessionId(), "error", "Invalid invite code or failed to join group");
             }
         });
+    }
+
+    private void broadcastToGroupMembers(UUID groupId, String messageType, Object data) {
+        try {
+            Document group = groupManager.getGroup(groupId);
+            if (group == null) return;
+
+            List<Document> members = group.getList("members", Document.class);
+            for (Document member : members) {
+                String memberIdStr = member.getString("playerId");
+                if (memberIdStr != null) {
+                    UUID memberId = UUID.fromString(memberIdStr);
+                    WebSession memberSession = activeSessions.get(memberId);
+                    if (memberSession != null) {
+                        sendWebResponse(memberSession.getSessionId(), messageType, data);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            plugin.getLogger().warning("Failed to broadcast to group members: " + e.getMessage());
+        }
     }
 
     private void handleGetGroupMembers(WebSession session, JsonObject data) {
@@ -715,10 +789,29 @@ public class WebAPIHandler {
                     "groupId", groupId,
                     "targetName", targetName
                 ));
+
+                // notify target player if they have an active web session
+                WebSession targetSession = activeSessions.get(target.getUniqueId());
+                if (targetSession != null) {
+                    sendWebResponse(targetSession.getSessionId(), "group_invite_received", Map.of(
+                        "groupId", groupId,
+                        "inviterName", session.getPlayerName(),
+                        "groupName", getGroupName(groupId) // Helper method to get group name
+                    ));
+                }
             } else {
                 sendWebResponse(session.getSessionId(), "error", "Failed to send group invite");
             }
         });
+    }
+
+    private String getGroupName(String groupId) {
+        try {
+            Document group = groupManager.getGroup(UUID.fromString(groupId));
+            return group != null ? group.getString("groupName") : "Unknown Group";
+        } catch (Exception e) {
+            return "Unknown Group";
+        }
     }
 
     private void handleCreateGroup(WebSession session, JsonObject data) {
@@ -817,18 +910,11 @@ public class WebAPIHandler {
 
     // broadcasts a message from Minecraft to web clients
     public void broadcastMinecraftMessage(UUID senderId, String senderName, String message, String type, Object context) {
-        String messageId = UUID.randomUUID().toString();
-        long timestamp = System.currentTimeMillis();
-        
         Map<String, Object> data = new HashMap<>();
-        data.put("messageId", messageId);
         data.put("sender", senderName);
-        data.put("senderUUID", senderId.toString());
-        data.put("senderName", senderName);
         data.put("senderId", senderId.toString());
         data.put("message", message);
-        data.put("content", message);
-        data.put("timestamp", timestamp);
+        data.put("timestamp", System.currentTimeMillis());
         data.put("source", "minecraft");
 
         switch (type) {
@@ -842,16 +928,6 @@ public class WebAPIHandler {
             case "group_message":
                 UUID groupId = (UUID) context;
                 data.put("groupId", groupId.toString());
-                // Get group name for the message
-                try {
-                    Document group = groupManager.getGroup(groupId);
-                    if (group != null) {
-                        data.put("group", group.getString("groupName"));
-                        data.put("groupName", group.getString("groupName"));
-                    }
-                } catch (Exception e) {
-                    // Silently handle error
-                }
                 broadcastToGroupWebSessions(groupId, "group_message", data);
                 break;
         }
@@ -860,6 +936,7 @@ public class WebAPIHandler {
     private void sendWebResponse(String sessionId, String type, Object data) {
         if (MinechatWebSocketHandler.isSessionConnected(sessionId)) {
             MinechatWebSocketHandler.sendToSession(sessionId, type, data);
+            plugin.getLogger().info("WebSocket response sent for session " + sessionId + ": " + type);
             return;
         }
 
@@ -873,6 +950,10 @@ public class WebAPIHandler {
                 response.put("sessionId", sessionId);
 
                 session.addResponse(response);
+
+                plugin.getLogger().info("Web response queued for session " + sessionId + ": " + type);
+            } else {
+                plugin.getLogger().warning("Attempted to send response to inactive session: " + sessionId);
             }
         } catch (Exception e) {
             plugin.getLogger().warning("Failed to send web response: " + e.getMessage());
@@ -882,13 +963,6 @@ public class WebAPIHandler {
     private void broadcastToGroupWebSessions(UUID groupId, String type, Object data) {
         activeSessions.values().stream()
             .filter(session -> isPlayerInGroup(session.getPlayerId(), groupId))
-            .forEach(session -> sendWebResponse(session.getSessionId(), type, data));
-    }
-
-    private void broadcastToGroupWebSessionsExcludingSender(UUID groupId, String senderSessionId, String type, Object data) {
-        activeSessions.values().stream()
-            .filter(session -> isPlayerInGroup(session.getPlayerId(), groupId))
-            .filter(session -> !session.getSessionId().equals(senderSessionId))
             .forEach(session -> sendWebResponse(session.getSessionId(), type, data));
     }
 

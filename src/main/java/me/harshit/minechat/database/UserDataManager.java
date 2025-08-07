@@ -308,13 +308,14 @@ public class UserDataManager {
 
                     playerDoc.append("rank", cleanRank)
                            .append("formattedRank", coloredFormattedRank)
-                           .append("lastSeen", System.currentTimeMillis());
+                           .append("lastSeen", System.currentTimeMillis())
+                           .append("online", true);
                 } else {
-                    // use cached rank data for offline players
                     Document cachedRank = getCachedRankData(userDoc);
                     playerDoc.append("rank", cachedRank.getString("cleanRank"))
                            .append("formattedRank", cachedRank.getString("formattedRank"))
-                           .append("lastSeen", userDoc.getLong("lastSeen"));
+                           .append("lastSeen", userDoc.getLong("lastSeen"))
+                           .append("online", false);
                 }
 
                 players.add(playerDoc);
@@ -338,7 +339,6 @@ public class UserDataManager {
                     .append("lastSeen", System.currentTimeMillis())
                     .append("firstJoin", System.currentTimeMillis());
 
-            // only insert if player doesn't already exist (preserves existing web passwords)
             Document existingPlayer = userCollection.find(new Document("playerUUID", playerUUID.toString())).first();
             if (existingPlayer == null) {
                 userCollection.insertOne(playerDoc);
@@ -359,7 +359,6 @@ public class UserDataManager {
         }
     }
 
-    // alaso update player data when they leave
     public void updatePlayerData(UUID playerUUID, String playerName, String cleanRank, String formattedRank, long lastSeen) {
         try {
             userCollection.updateOne(
@@ -381,7 +380,6 @@ public class UserDataManager {
         try {
             List<Document> players = new ArrayList<>();
 
-            // regex for case-insensitive partial matching
             Document filter = new Document("playerName",
                 new Document("$regex", ".*" + query + ".*").append("$options", "i"));
 

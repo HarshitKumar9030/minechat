@@ -9,8 +9,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
-// This class manages friend requests and friendships between players
-// It allows sending, accepting, denying friend requests, and managing friendships
 
 
 public class FriendManager {
@@ -25,15 +23,7 @@ public class FriendManager {
         this.plugin = plugin;
     }
 
-    /**
-     * Sends a friend request from one player to another
-     * @param senderUUID UUID of the player sending the request
-     * @param senderName Name of the sender
-     * @param targetUUID UUID of the target player
-     * @param targetName Name of the target player
-     * @return true if request was sent successfully
-     */
-
+ 
 
     public boolean sendFriendRequest(UUID senderUUID, String senderName, UUID targetUUID, String targetName) {
         try {

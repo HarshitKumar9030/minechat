@@ -5,9 +5,11 @@ import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
 import me.harshit.minechat.Minechat;
 import me.harshit.minechat.api.GroupInfo;
+import me.harshit.minechat.database.DatabaseManager;
 import me.harshit.minechat.database.FriendManager;
 import me.harshit.minechat.database.GroupManager;
 import me.harshit.minechat.database.UserDataManager;
+import me.harshit.minechat.web.KickMemberHandler;
 import com.google.gson.Gson;
 import com.google.gson.JsonObject;
 import org.bson.Document;
@@ -27,10 +29,10 @@ import com.google.gson.JsonElement;
 import java.util.UUID;
 import java.util.concurrent.Executors;
 
-// todo: add routes to manage friends and groups from the web app
 public class EmbeddedWebServer {
 
     private final Minechat plugin;
+    private final DatabaseManager databaseManager;
     private final UserDataManager userDataManager;
     private final FriendManager friendManager;
     private final GroupManager groupManager;
@@ -38,9 +40,10 @@ public class EmbeddedWebServer {
     private HttpServer server;
     private final int port;
 
-    public EmbeddedWebServer(Minechat plugin, UserDataManager userDataManager,
+    public EmbeddedWebServer(Minechat plugin, DatabaseManager databaseManager, UserDataManager userDataManager,
                            FriendManager friendManager, GroupManager groupManager) {
         this.plugin = plugin;
+        this.databaseManager = databaseManager;
         this.userDataManager = userDataManager;
         this.friendManager = friendManager;
         this.groupManager = groupManager;
@@ -53,81 +56,74 @@ public class EmbeddedWebServer {
             server = HttpServer.create(new InetSocketAddress(port), 0);
             server.setExecutor(Executors.newFixedThreadPool(4));
 
-            // cors is imp
             server.createContext("/", new CORSHandler());
 
-            // Basic API endpoints
             server.createContext("/api/auth", new AuthHandler());
+
             server.createContext("/api/friends", new FriendsHandler());
-            server.createContext("/api/groups", new GroupsHandler());
-            server.createContext("/api/messages", new MessagesHandler());
-            server.createContext("/api/send-message", new SendMessageHandler());
             server.createContext("/api/send-friend-request", new SendFriendRequestHandler());
             server.createContext("/api/accept-friend-request", new AcceptFriendRequestHandler());
             server.createContext("/api/reject-friend-request", new RejectFriendRequestHandler());
             server.createContext("/api/remove-friend", new RemoveFriendHandler());
-            server.createContext("/api/create-group", new CreateGroupHandler());
-            server.createContext("/api/delete-group", new DeleteGroupHandler());
-            server.createContext("/api/join-group", new JoinGroupHandler());
-            server.createContext("/api/leave-group", new LeaveGroupHandler());
-            server.createContext("/api/ranks", new RanksHandler());
-            server.createContext("/api/users", new UsersHandler());
+            server.createContext("/api/cancel-friend-request", new CancelFriendRequestHandler());
             server.createContext("/api/friend-requests", new FriendRequestsHandler());
-
-            server.createContext("/api/players", new PlayersHandler());
-            server.createContext("/api/search-players", new SearchPlayersHandler());
             server.createContext("/api/friend-requests/incoming", new IncomingFriendRequestsHandler());
             server.createContext("/api/friend-requests/outgoing", new OutgoingFriendRequestsHandler());
             server.createContext("/api/friend-stats", new FriendStatsHandler());
-            server.createContext("/api/cancel-friend-request", new CancelFriendRequestHandler());
 
-            // core group management endpoints
-            server.createContext("/api/group-members", new me.harshit.minechat.web.GroupMembersHandler(plugin));
-            server.createContext("/api/kick-member", new me.harshit.minechat.web.KickMemberHandler(plugin));
-            server.createContext("/api/group-messages", new me.harshit.minechat.web.GroupMessagesHandler(plugin));
-            server.createContext("/api/send-group-message", new me.harshit.minechat.web.SendGroupMessageHandler(plugin));
-            server.createContext("/api/search-groups", new me.harshit.minechat.web.SearchGroupsHandler(plugin));
+            server.createContext("/api/groups", new GroupsHandler());
+            server.createContext("/api/create-group", new CreateGroupHandler());
+            server.createContext("/api/delete-group", new DeleteGroupHandler());
+            server.createContext("/api/join-group", new JoinGroupHandler());
+            server.createContext("/api/join-group-by-code", new JoinGroupByCodeHandler(plugin));
+            server.createContext("/api/leave-group", new LeaveGroupHandler());
+            server.createContext("/api/update-group", new UpdateGroupHandler());
+            server.createContext("/api/group-stats", new GroupStatsHandler());
+            server.createContext("/api/group-members", new GroupMembersHandler());
+            server.createContext("/api/group-invites", new GroupInvitesHandler(plugin, groupManager));
+            server.createContext("/api/accept-group-invite", new AcceptGroupInviteHandler(plugin));
+            server.createContext("/api/reject-group-invite", new RejectGroupInviteHandler(plugin));
+            server.createContext("/api/add-announcement", new AddAnnouncementHandler(plugin));
+            
+            KickMemberHandler moderationHandler = new KickMemberHandler(plugin);
+            server.createContext("/api/kick-member", moderationHandler);
+            server.createContext("/api/ban-member", moderationHandler);
+            server.createContext("/api/mute-member", moderationHandler);
+            server.createContext("/api/unmute-member", moderationHandler);
+            server.createContext("/api/promote-member", moderationHandler);
+            server.createContext("/api/demote-member", moderationHandler);
+            server.createContext("/api/update-group-motd", moderationHandler);
+            server.createContext("/api/update-announcement", moderationHandler);
+            server.createContext("/api/remove-announcement", moderationHandler);
 
-            // essential group operations (using existing handlers with proper logic)
             server.createContext("/api/public-groups", new GroupsHandler());
             server.createContext("/api/trending-groups", new GroupsHandler());
             server.createContext("/api/recommended-groups", new GroupsHandler());
-            server.createContext("/api/group-details", new GroupsHandler());
-            server.createContext("/api/join-group-by-code", new JoinGroupHandler());
 
-            // member management (using KickMemberHandler as base for similar operations)
-            server.createContext("/api/ban-member", new me.harshit.minechat.web.KickMemberHandler(plugin));
-            server.createContext("/api/promote-member", new me.harshit.minechat.web.KickMemberHandler(plugin));
-            server.createContext("/api/mute-member", new me.harshit.minechat.web.KickMemberHandler(plugin));
+            server.createContext("/api/messages", new MessagesHandler());
+            server.createContext("/api/send-message", new SendMessageHandler());
+            server.createContext("/api/group-messages", new GroupMessagesHandler());
+            server.createContext("/api/send-group-message", new SendGroupMessageHandler());
 
-            // group invitations (reusing friend request logic where applicable)
-            server.createContext("/api/group-invites", new FriendRequestsHandler());
-            server.createContext("/api/send-group-invite", new SendFriendRequestHandler());
-            server.createContext("/api/accept-group-invite", new AcceptFriendRequestHandler());
+            server.createContext("/api/users", new UsersHandler());
+            server.createContext("/api/players", new PlayersHandler());
+            server.createContext("/api/search-players", new SearchPlayersHandler());
+            server.createContext("/api/ranks", new RanksHandler());
 
-            server.createContext("/api/group-settings", new GroupsHandler());
-            server.createContext("/api/update-group", new UpdateGroupHandler());
-            server.createContext("/api/update-group-settings", new CreateGroupHandler());
-            server.createContext("/api/group-invite-code", new GroupsHandler());
-            server.createContext("/api/group-stats", new GroupStatsHandler());
-
-            // Test endpoint
+            server.createContext("/api/health", new HealthHandler());
+            server.createContext("/api/health/detailed", new HealthHandler());
             server.createContext("/api/test", new TestHandler());
 
             server.start();
             plugin.getLogger().info("Web server started successfully on port " + port);
             plugin.getLogger().info("Access web API at: http://localhost:" + port);
 
-            // This is for someone who is running this plugin on their server
-            // Either you can use a reverse proxy like nginx to forward this port to a domain then connect it with the web interface
-            // or you can run the web interface in the same machine and just connect to "localhost:8080"
-            // I'd say go with the reverse proxy if ur running a big server, else avoid hassle and just use localhost
-
         } catch (IOException e) {
             plugin.getLogger().severe("Failed to start web server on port " + port + ": " + e.getMessage());
             plugin.getLogger().severe("Make sure port " + port + " is not in use by another application");
         } catch (Exception e) {
             plugin.getLogger().severe("Unexpected error starting web server: " + e.getMessage());
+            e.printStackTrace();
         }
     }
 
@@ -233,7 +229,6 @@ public class EmbeddedWebServer {
 
                     List<Document> friends = friendManager.getFriendList(UUID.fromString(playerUUID));
 
-                    // Add online status
                     friends.forEach(friend -> {
                         String friendName = friend.getString("friendName");
                         Player onlineFriend = Bukkit.getPlayerExact(friendName);
@@ -279,6 +274,8 @@ public class EmbeddedWebServer {
                         
                         for (Document group : groups) {
                             List<Document> members = group.getList("members", Document.class);
+                            group.append("memberCount", members != null ? members.size() : 0);
+                            
                             String userRole = members.stream()
                                 .filter(member -> member.getString("playerId").equals(playerId.toString()))
                                 .map(member -> member.getString("role"))
@@ -357,7 +354,6 @@ public class EmbeddedWebServer {
 
         private void handleTrendingGroups(HttpExchange exchange) throws IOException {
             try {
-                // For now, return the most active public groups,  todo: implement trending logic
                 List<Document> trendingGroups = groupManager.getTrendingGroups();
                 Map<String, Object> response = Map.of("groups", trendingGroups);
                 sendJsonResponse(exchange, response, 200);
@@ -428,11 +424,8 @@ public class EmbeddedWebServer {
                     String message = json.get("message").getAsString();
                     String groupId = json.get("groupId").getAsString();
 
-                    // Store message in database
-                    groupManager.storeGroupMessage(UUID.fromString(groupId), UUID.fromString(senderId),
-                                                 senderName, message, "web");
+   
 
-                    // Send to online players in the group
                     Bukkit.getScheduler().runTask(plugin, () -> {
                         Document group = groupManager.getGroup(UUID.fromString(groupId));
                         if (group != null) {
@@ -475,6 +468,79 @@ public class EmbeddedWebServer {
             if ("GET".equals(exchange.getRequestMethod())) {
                 Map<String, Object> response = Map.of("status", "Server is running");
                 sendJsonResponse(exchange, response, 200);
+            } else {
+                sendErrorResponse(exchange, "Method not allowed", 405);
+            }
+        }
+    }
+
+    private class HealthHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            new CORSHandler().handle(exchange);
+
+            if ("GET".equals(exchange.getRequestMethod())) {
+                try {
+                    String path = exchange.getRequestURI().getPath();
+
+                    if (path.endsWith("/detailed")) {
+                        Map<String, Object> health = new HashMap<>();
+                        health.put("status", "UP");
+                        health.put("timestamp", System.currentTimeMillis());
+                        health.put("server", "Minechat Web API");
+                        health.put("version", "1.0.0");
+
+                        Map<String, Object> components = new HashMap<>();
+
+                        try {
+                            if (databaseManager != null && databaseManager.isConnected()) {
+                                components.put("database", Map.of(
+                                    "status", "UP",
+                                    "type", "MongoDB"
+                                ));
+                            } else {
+                                components.put("database", Map.of(
+                                    "status", "DOWN",
+                                    "type", "MongoDB"
+                                ));
+                            }
+                        } catch (Exception e) {
+                            components.put("database", Map.of(
+                                "status", "DOWN",
+                                "error", e.getMessage()
+                            ));
+                        }
+
+                        try {
+                            components.put("bukkit", Map.of(
+                                "status", "UP",
+                                "onlinePlayers", Bukkit.getOnlinePlayers().size(),
+                                "maxPlayers", Bukkit.getMaxPlayers()
+                            ));
+                        } catch (Exception e) {
+                            components.put("bukkit", Map.of(
+                                "status", "DOWN",
+                                "error", e.getMessage()
+                            ));
+                        }
+
+                        health.put("components", components);
+                        sendJsonResponse(exchange, health, 200);
+                    } else {
+                        Map<String, Object> health = Map.of(
+                            "status", "UP",
+                            "timestamp", System.currentTimeMillis()
+                        );
+                        sendJsonResponse(exchange, health, 200);
+                    }
+                } catch (Exception e) {
+                    Map<String, Object> health = Map.of(
+                        "status", "DOWN",
+                        "timestamp", System.currentTimeMillis(),
+                        "error", e.getMessage()
+                    );
+                    sendJsonResponse(exchange, health, 500);
+                }
             } else {
                 sendErrorResponse(exchange, "Method not allowed", 405);
             }
@@ -544,7 +610,6 @@ public class EmbeddedWebServer {
                     String senderName = json.get("senderName").getAsString();
                     String targetName = json.get("targetName").getAsString();
 
-                    // Check if target player exists in database
                     if (!userDataManager.playerExists(targetName)) {
                         sendErrorResponse(exchange, "Player not found", 404);
                         return;
@@ -556,7 +621,6 @@ public class EmbeddedWebServer {
                     );
 
                     if (success) {
-                        // Notify online target player if they're online
                         Player targetPlayer = Bukkit.getPlayerExact(targetName);
                         if (targetPlayer != null && targetPlayer.isOnline()) {
                             targetPlayer.sendMessage("§aYou received a friend request from " + senderName + " (via web)");
@@ -595,7 +659,6 @@ public class EmbeddedWebServer {
                     );
 
                     if (success) {
-                        // Get requester name and notify if online
                         String requesterName = getPlayerNameByUUID(UUID.fromString(requesterUUID));
                         Player requesterPlayer = Bukkit.getPlayerExact(requesterName);
                         if (requesterPlayer != null && requesterPlayer.isOnline()) {
@@ -689,9 +752,16 @@ public class EmbeddedWebServer {
                     String creatorUUID = json.get("creatorUUID").getAsString();
                     String creatorName = json.get("creatorName").getAsString();
                     String groupName = json.get("groupName").getAsString();
-                    String description = json.has("description") ? json.get("description").getAsString() : "";
-                    int maxMembers = json.has("maxMembers") ? json.get("maxMembers").getAsInt() : 20;
-                    boolean isPrivate = json.has("isPrivate") ? json.get("isPrivate").getAsBoolean() : false;
+                    String description = json.has("description") && !json.get("description").isJsonNull() ? json.get("description").getAsString() : "";
+                    int maxMembers = json.has("maxMembers") && !json.get("maxMembers").isJsonNull() ? json.get("maxMembers").getAsInt() : 20;
+                    boolean isPrivate = false;
+                    if (json.has("isPrivate") && !json.get("isPrivate").isJsonNull()) {
+                        try {
+                            isPrivate = json.get("isPrivate").getAsBoolean();
+                        } catch (Exception e) {
+                            isPrivate = false;
+                        }
+                    }
 
                     GroupInfo createdGroup = groupManager.createGroup(
                         UUID.fromString(creatorUUID), creatorName, groupName, description, maxMembers, isPrivate
@@ -753,6 +823,34 @@ public class EmbeddedWebServer {
                         Map<String, Object> response = Map.of("success", true, "message", "Joined group successfully");
                         sendJsonResponse(exchange, response, 200);
                     } else {
+                        Document group = groupManager.getGroup(UUID.fromString(groupId));
+                        if (group != null) {
+                            List<Document> members = group.getList("members", Document.class);
+                            boolean alreadyMember = members.stream()
+                                    .anyMatch(member -> member.getString("playerId").equals(playerUUID));
+                            
+                            if (alreadyMember) {
+                                Map<String, Object> response = Map.of(
+                                    "success", false, 
+                                    "error", "ALREADY_MEMBER",
+                                    "message", "You are already a member of this group"
+                                );
+                                sendJsonResponse(exchange, response, 400);
+                                return;
+                            }
+                            
+                            int maxMembers = group.getInteger("maxMembers", 25);
+                            if (members.size() >= maxMembers) {
+                                Map<String, Object> response = Map.of(
+                                    "success", false, 
+                                    "error", "GROUP_FULL",
+                                    "message", "This group is full"
+                                );
+                                sendJsonResponse(exchange, response, 400);
+                                return;
+                            }
+                        }
+                        
                         sendErrorResponse(exchange, "Failed to join group", 400);
                     }
 
@@ -807,7 +905,6 @@ public class EmbeddedWebServer {
                     String groupId = json.get("groupId").getAsString();
                     String ownerUUID = json.get("ownerUUID").getAsString();
 
-                    // verify that the user is the owner of the group
                     Document group = groupManager.getGroup(UUID.fromString(groupId));
                     if (group == null) {
                         sendErrorResponse(exchange, "Group not found", 404);
@@ -823,7 +920,6 @@ public class EmbeddedWebServer {
                     boolean success = groupManager.deleteGroup(UUID.fromString(groupId), UUID.fromString(ownerUUID));
 
                     if (success) {
-                        // notify
                         List<Document> members = group.getList("members", Document.class);
                         String groupName = group.getString("groupName");
                         String ownerName = getPlayerNameByUUID(UUID.fromString(ownerUUID));
@@ -923,7 +1019,6 @@ public class EmbeddedWebServer {
 
                     List<Document> players = userDataManager.searchPlayersByName(searchQuery);
                     
-                    // apply limit if specified
                     if (limitParam != null) {
                         try {
                             int limit = Integer.parseInt(limitParam);
@@ -931,7 +1026,6 @@ public class EmbeddedWebServer {
                                 players = players.subList(0, limit);
                             }
                         } catch (NumberFormatException e) {
-                            // ignore invalid limit, use all results
                         }
                     }
 
@@ -1083,7 +1177,6 @@ public class EmbeddedWebServer {
 
                     List<Document> members = group.getList("members", Document.class);
 
-                    // Add online status and rank info for each member
                     members.forEach(member -> {
                         String memberName = member.getString("playerName");
                         Player onlineMember = Bukkit.getPlayerExact(memberName);
@@ -1109,7 +1202,7 @@ public class EmbeddedWebServer {
         }
     }
 
-    private class KickMemberHandler implements HttpHandler {
+    private class LegacyKickMemberHandler implements HttpHandler {
         @Override
         public void handle(HttpExchange exchange) throws IOException {
             new CORSHandler().handle(exchange);
@@ -1124,7 +1217,6 @@ public class EmbeddedWebServer {
                     String targetUUID = json.get("targetUUID").getAsString();
                     String reason = json.has("reason") ? json.get("reason").getAsString() : "No reason provided";
 
-                    // Verify admin has permission to kick
                     Document group = groupManager.getGroup(UUID.fromString(groupId));
                     if (group == null) {
                         sendErrorResponse(exchange, "Group not found", 404);
@@ -1145,7 +1237,6 @@ public class EmbeddedWebServer {
                     );
 
                     if (success) {
-                        // Notify online group members
                         String adminName = getPlayerNameByUUID(UUID.fromString(adminUUID));
                         String targetName = getPlayerNameByUUID(UUID.fromString(targetUUID));
                         String groupName = group.getString("groupName");
@@ -1159,7 +1250,6 @@ public class EmbeddedWebServer {
                             }
                         }
 
-                        // Notify kicked player if online
                         Player kickedPlayer = Bukkit.getPlayerExact(targetName);
                         if (kickedPlayer != null && kickedPlayer.isOnline()) {
                             kickedPlayer.sendMessage("§cYou were kicked from " + groupName + " by " + adminName + ". Reason: " + reason);
@@ -1226,11 +1316,6 @@ public class EmbeddedWebServer {
                     String message = json.get("message").getAsString();
                     String groupId = json.get("groupId").getAsString();
 
-                    // Store message in database
-                    groupManager.storeGroupMessage(UUID.fromString(groupId), UUID.fromString(senderId),
-                                                 senderName, message, "web");
-
-                    // Send to online players in the group
                     Bukkit.getScheduler().runTask(plugin, () -> {
                         Document group = groupManager.getGroup(UUID.fromString(groupId));
                         if (group != null) {
@@ -1324,9 +1409,9 @@ public class EmbeddedWebServer {
                                 } else if (timestamp instanceof Number) {
                                     return ((Number) timestamp).longValue();
                                 }
-                                return 0L; // default fallback
+                                return 0L; 
                             } catch (Exception e) {
-                                return 0L; // return 0 for invalid timestamps
+                                return 0L; 
                             }
                         })
                         .filter(timestamp -> {
@@ -1338,7 +1423,6 @@ public class EmbeddedWebServer {
                     long weekMessages = messages.stream()
                         .mapToLong(msg -> {
                             try {
-                                // handle both string and long timestamp formats
                                 Object timestamp = msg.get("timestamp");
                                 if (timestamp instanceof String) {
                                     return Long.parseLong((String) timestamp);
@@ -1347,9 +1431,9 @@ public class EmbeddedWebServer {
                                 } else if (timestamp instanceof Number) {
                                     return ((Number) timestamp).longValue();
                                 }
-                                return 0L; // default fallback
+                                return 0L; 
                             } catch (Exception e) {
-                                return 0L; // return 0 for invalid timestamps
+                                return 0L;
                             }
                         })
                         .filter(timestamp -> {
@@ -1475,12 +1559,10 @@ public class EmbeddedWebServer {
     }
 
     private String getPlayerNameByUUID(UUID playerUUID) {
-        // try to get from online players first
         Player player = Bukkit.getPlayer(playerUUID);
         if (player != null) {
             return player.getName();
         }
-        // search in db
         String playerName = userDataManager.getPlayerNameByUUID(playerUUID);
         return playerName != null ? playerName : "Unknown Player";
     }

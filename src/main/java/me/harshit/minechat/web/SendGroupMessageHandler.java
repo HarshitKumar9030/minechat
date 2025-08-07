@@ -97,7 +97,7 @@ public class SendGroupMessageHandler implements HttpHandler {
                 return;
             }
 
-            groupManager.storeGroupMessage(groupUUID, senderUUID, senderName, message, "web");
+            
 
             Bukkit.getScheduler().runTask(plugin, () -> {
                 try {

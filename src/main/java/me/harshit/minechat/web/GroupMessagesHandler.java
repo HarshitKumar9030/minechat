@@ -108,7 +108,6 @@ public class GroupMessagesHandler implements HttpHandler {
             List<Document> messageDocuments = groupManager.getGroupMessages(groupUUID, limit);
             List<GroupMessage> messages = new ArrayList<>();
 
-            // convert documents to GroupMessage objects
             for (Document doc : messageDocuments) {
                 try {
                     GroupMessage message = GroupMessage.fromDocument(doc);

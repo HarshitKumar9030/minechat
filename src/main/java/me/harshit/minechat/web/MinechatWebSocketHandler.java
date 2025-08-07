@@ -41,9 +41,7 @@ public class MinechatWebSocketHandler extends WebSocketAdapter {
         sessions.put(sessionId, session);
         sessionIds.put(session, sessionId);
 
-        plugin.getLogger().fine("WebSocket connection established: " + sessionId);
 
-        // send connection confirmation
         JsonObject response = new JsonObject();
         response.addProperty("type", "connection");
         response.addProperty("sessionId", sessionId);
@@ -61,12 +59,8 @@ public class MinechatWebSocketHandler extends WebSocketAdapter {
             String type = json.get("type").getAsString();
             JsonObject data = json.has("data") ? json.getAsJsonObject("data") : new JsonObject();
 
-            // only log non-routine messages to reduce spam
-            if (!"ping".equals(type) && !"group_message".equals(type)) {
-                plugin.getLogger().fine("WebSocket message received: " + type + " from session: " + sessionId);
-            }
 
-            // Handle authentication
+
             if ("auth".equals(type)) {
                 handleAuthentication(data);
                 return;
@@ -104,10 +98,7 @@ public class MinechatWebSocketHandler extends WebSocketAdapter {
                 apiHandler.removeSession(sessionId);
             }
 
-            // Only log unexpected disconnections, not normal client disconnects or timeouts
-            if (statusCode != 1000 && statusCode != 1001) {
-                plugin.getLogger().fine("WebSocket connection closed: " + sessionId + " (Code: " + statusCode + ", Reason: " + reason + ")");
-            }
+
         }
     }
 
@@ -116,7 +107,6 @@ public class MinechatWebSocketHandler extends WebSocketAdapter {
     public void onWebSocketError(Throwable cause) {
         super.onWebSocketError(cause);
 
-        // Handle timeout errors silently as they are normal
         if (cause.getMessage() != null && cause.getMessage().contains("Idle Timeout")) {
             plugin.getLogger().fine("WebSocket idle timeout for session " + sessionId);
             return;
@@ -139,7 +129,6 @@ public class MinechatWebSocketHandler extends WebSocketAdapter {
             if (authenticated) {
                 response.addProperty("message", "Authentication successful");
                 response.addProperty("username", username);
-                plugin.getLogger().info("WebSocket authentication successful for: " + username);
             } else {
                 response.addProperty("message", "Authentication failed");
                 plugin.getLogger().warning("WebSocket authentication failed for: " + username);
@@ -186,7 +175,6 @@ public class MinechatWebSocketHandler extends WebSocketAdapter {
         return "ws-" + System.currentTimeMillis() + "-" + Math.random();
     }
 
-    // static methods for external access
     public static boolean isSessionConnected(String sessionId) {
         Session session = sessions.get(sessionId);
         return session != null && session.isOpen();
@@ -238,7 +226,6 @@ public class MinechatWebSocketHandler extends WebSocketAdapter {
 
     public static void cleanup() {
         try {
-            // close all open sessions
             sessions.values().forEach(session -> {
                 try {
                     if (session.isOpen()) {
@@ -249,7 +236,6 @@ public class MinechatWebSocketHandler extends WebSocketAdapter {
                 }
             });
 
-            // Clear all session collections
             sessions.clear();
             sessionIds.clear();
         } catch (Exception e) {

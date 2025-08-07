@@ -25,10 +25,8 @@ public class DatabaseManager {
         this.plugin = plugin;
     }
 
-    // connect using the conn string from config
     public boolean connect() {
         try {
-            // Get connection details from config
             String connectionString = plugin.getConfig().getString("mongodb.connection-string");
             String databaseName = plugin.getConfig().getString("mongodb.database-name");
             String collectionName = plugin.getConfig().getString("mongodb.collection-name");
@@ -49,13 +47,6 @@ public class DatabaseManager {
         }
     }
 
-    /**
-     * Stores a chat message in the database
-     * @param playerName Name of the player who sent the message
-     * @param playerUUID UUID of the player
-     * @param message The chat message content
-     * @param serverName Name of the server
-     */
 
     public void storeChatMessage(String playerName, UUID playerUUID, String message, String serverName) {
         try {
@@ -74,17 +65,11 @@ public class DatabaseManager {
         }
     }
 
-    /**
-     * Retrieves recent chat messages
-     * @param limit Maximum number of messages to retrieve
-     * @return List of chat message documents
-     */
 
     public List<Document> getRecentMessages(int limit) {
         try {
             List<Document> messages = new ArrayList<>();
 
-            // Get messages sorted by date (newest first)
             chatCollection.find()
                     .sort(new Document("date", -1))
                     .limit(limit)
@@ -98,12 +83,7 @@ public class DatabaseManager {
         }
     }
 
-    /**
-     * Gets chat messages from a specific player
-     * @param playerName Name of the player
-     * @param limit Maximum number of messages
-     * @return List of messages from that player
-     */
+
 
     public List<Document> getPlayerMessages(String playerName, int limit) {
         try {
@@ -122,7 +102,6 @@ public class DatabaseManager {
         }
     }
 
-   // close db connection
     public void disconnect() {
         if (mongoClient != null) {
             mongoClient.close();
@@ -130,7 +109,6 @@ public class DatabaseManager {
         }
     }
 
-    // true if connected else false
     public boolean isConnected() {
         try {
             if (mongoClient == null) return false;

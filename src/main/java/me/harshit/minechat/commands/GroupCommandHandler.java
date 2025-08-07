@@ -206,7 +206,6 @@ public class GroupCommandHandler implements CommandExecutor, TabCompleter {
                 .append(Component.text(" - Get invite code for private groups").color(NamedTextColor.GRAY)));
         player.sendMessage(Component.text(""));
 
-        // Messaging Section
         player.sendMessage(Component.text("💬 Group Messaging")
                 .color(NamedTextColor.GREEN)
                 .decoration(TextDecoration.BOLD, true));
@@ -226,7 +225,6 @@ public class GroupCommandHandler implements CommandExecutor, TabCompleter {
                 .append(Component.text("(admin)").color(NamedTextColor.GOLD)));
         player.sendMessage(Component.text(""));
 
-        // admin Commands (only show if player has admin groups)
         if (hasAdminGroups(player)) {
             player.sendMessage(Component.text("⚔️ Member Management")
                     .color(NamedTextColor.RED)
@@ -283,7 +281,6 @@ public class GroupCommandHandler implements CommandExecutor, TabCompleter {
             player.sendMessage(Component.text(""));
         }
 
-        // footer with tips and aliases
         player.sendMessage(Component.text("▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬")
                 .color(NamedTextColor.GOLD));
 
@@ -324,12 +321,23 @@ public class GroupCommandHandler implements CommandExecutor, TabCompleter {
 
     private boolean handleCreateGroup(Player player, String[] args) {
         if (args.length < 2) {
-            player.sendMessage(Component.text("Usage: /group create <name> [description]").color(NamedTextColor.RED));
+            player.sendMessage(Component.text("Usage: /group create <name> [description] [--private]").color(NamedTextColor.RED));
             return true;
         }
 
         String groupName = args[1];
-        String description = args.length > 2 ? String.join(" ", Arrays.copyOfRange(args, 2, args.length)) : "A new group";
+        boolean isPrivate = false;
+        List<String> descriptionParts = new ArrayList<>();
+        
+        for (int i = 2; i < args.length; i++) {
+            if (args[i].equalsIgnoreCase("--private") || args[i].equalsIgnoreCase("-p")) {
+                isPrivate = true;
+            } else {
+                descriptionParts.add(args[i]);
+            }
+        }
+        
+        String description = descriptionParts.isEmpty() ? "A new group" : String.join(" ", descriptionParts);
 
         if (groupName.length() < 3 || groupName.length() > 32) {
             player.sendMessage(Component.text("Group name must be between 3 and 32 characters!").color(NamedTextColor.RED));
@@ -394,7 +402,6 @@ public class GroupCommandHandler implements CommandExecutor, TabCompleter {
                 return true;
             }
         } else {
-            // Try to find by name
             group = groupManager.getGroupByName(identifier);
             if (group == null) {
                 player.sendMessage(Component.text("Group not found!").color(NamedTextColor.RED));
@@ -439,7 +446,6 @@ public class GroupCommandHandler implements CommandExecutor, TabCompleter {
         }
 
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
-            // Target player lookup from db
             UUID targetUUID = plugin.getUserDataManager().getPlayerUUIDByName(targetName);
 
             if (targetUUID == null) {
@@ -449,7 +455,6 @@ public class GroupCommandHandler implements CommandExecutor, TabCompleter {
                 return;
             }
 
-            // Find the group
             Document group = findGroupByName(groupName, player.getUniqueId());
             if (group == null) {
                 Bukkit.getScheduler().runTask(plugin, () -> {
@@ -466,7 +471,6 @@ public class GroupCommandHandler implements CommandExecutor, TabCompleter {
                 if (success) {
                     player.sendMessage(Component.text("✓ Invitation sent to " + targetName + "!").color(NamedTextColor.GREEN));
 
-                    // Notify target player if they're online
                     Player target = Bukkit.getPlayerExact(targetName);
                     if (target != null && target.isOnline()) {
                         Component inviteMessage = Component.text("🎉 " + player.getName() + " invited you to group '" + groupName + "'! ")
@@ -512,21 +516,8 @@ public class GroupCommandHandler implements CommandExecutor, TabCompleter {
 
             UUID groupId = UUID.fromString(group.getString("groupId"));
 
-            // store message for web sync
-            groupManager.storeGroupMessage(groupId, player.getUniqueId(), player.getName(), message, "minecraft");
 
-            // broadcast to web clients
-            if (plugin.getWebAPIHandler() != null) {
-                plugin.getWebAPIHandler().broadcastMinecraftMessage(
-                    player.getUniqueId(),
-                    player.getName(),
-                    message,
-                    "group_message",
-                    groupId
-                );
-            }
 
-            // format and send message to all group members
             String format = plugin.getConfig().getString("chat-groups.format",
                     "&7[&aGroup: &b{group}&7] &f{player}&7: &f{message}");
             String formattedMessage = format
@@ -552,7 +543,6 @@ public class GroupCommandHandler implements CommandExecutor, TabCompleter {
     }
 
     private Document findGroupByName(String groupName, UUID playerId) {
-        // used to find group by name of a player
         List<Document> playerGroups = groupManager.getPlayerGroupsAsDocuments(playerId);
         return playerGroups.stream()
                 .filter(group -> group.getString("groupName").equalsIgnoreCase(groupName))
@@ -569,7 +559,6 @@ public class GroupCommandHandler implements CommandExecutor, TabCompleter {
         String groupName = args[1];
 
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
-            // Find pending invite for this group
             List<Document> invites = groupManager.getPendingGroupInvites(player.getUniqueId());
             Document invite = invites.stream()
                     .filter(inv -> {
@@ -611,7 +600,6 @@ public class GroupCommandHandler implements CommandExecutor, TabCompleter {
         String groupName = args[1];
 
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
-            // Find and remove pending invite
             List<Document> invites = groupManager.getPendingGroupInvites(player.getUniqueId());
             boolean found = invites.stream()
                     .anyMatch(inv -> {
@@ -927,6 +915,11 @@ public class GroupCommandHandler implements CommandExecutor, TabCompleter {
         String targetName = args[2];
         String reason = args.length > 3 ? String.join(" ", Arrays.copyOfRange(args, 3, args.length)) : "No reason provided";
 
+        if (targetName.equalsIgnoreCase(player.getName())) {
+            player.sendMessage(Component.text("You cannot ban yourself!").color(NamedTextColor.RED));
+            return true;
+        }
+
         GroupInfo group = groupManager.getGroupByName(groupName);
         if (group == null) {
             player.sendMessage(Component.text("Group not found!").color(NamedTextColor.RED));
@@ -944,6 +937,11 @@ public class GroupCommandHandler implements CommandExecutor, TabCompleter {
 
         if (targetUUID == null) {
             player.sendMessage(Component.text("Player not found!").color(NamedTextColor.RED));
+            return true;
+        }
+
+        if (targetUUID.equals(player.getUniqueId())) {
+            player.sendMessage(Component.text("You cannot ban yourself!").color(NamedTextColor.RED));
             return true;
         }
 
@@ -974,12 +972,25 @@ public class GroupCommandHandler implements CommandExecutor, TabCompleter {
     private boolean handleMuteMember(Player player, String[] args) {
         if (args.length < 3) {
             player.sendMessage(Component.text("Usage: /group mute <group> <player> [duration]").color(NamedTextColor.RED));
+            player.sendMessage(Component.text("Duration examples: 30m, 2h, 1d (default: 60m)").color(NamedTextColor.GRAY));
             return true;
         }
 
         String groupName = args[1];
         String targetName = args[2];
-        int duration = args.length > 3 ? Integer.parseInt(args[3]) : 60; // Default 60 minutes
+
+        if (targetName.equalsIgnoreCase(player.getName())) {
+            player.sendMessage(Component.text("You cannot mute yourself!").color(NamedTextColor.RED));
+            return true;
+        }
+
+        int duration;
+        try {
+            duration = args.length > 3 ? parseDuration(args[3]) : 60; // Default 60 minutes
+        } catch (IllegalArgumentException e) {
+            player.sendMessage(Component.text("Invalid duration format! Use examples: 30m, 2h, 1d").color(NamedTextColor.RED));
+            return true;
+        }
 
         GroupInfo group = groupManager.getGroupByName(groupName);
         if (group == null) {
@@ -1001,24 +1012,102 @@ public class GroupCommandHandler implements CommandExecutor, TabCompleter {
             return true;
         }
 
+        if (targetUUID.equals(player.getUniqueId())) {
+            player.sendMessage(Component.text("You cannot mute yourself!").color(NamedTextColor.RED));
+            return true;
+        }
+
         try {
             boolean success = groupManager.muteMember(group.getGroupId(), targetUUID, player.getUniqueId(), duration);
             if (success) {
+                String durationText = formatDuration(duration);
                 player.sendMessage(Component.text("Successfully muted ").color(NamedTextColor.GREEN)
                         .append(Component.text(targetName).color(NamedTextColor.YELLOW))
-                        .append(Component.text(" for " + duration + " minutes!")));
+                        .append(Component.text(" for " + durationText + "!")));
 
                 if (target != null) {
                     target.sendMessage(Component.text("You have been muted in group ").color(NamedTextColor.YELLOW)
                             .append(Component.text(group.getGroupName()).color(NamedTextColor.AQUA))
-                            .append(Component.text(" for " + duration + " minutes").color(NamedTextColor.GRAY)));
+                            .append(Component.text(" for " + durationText).color(NamedTextColor.GRAY)));
                 }
+            } else {
+                player.sendMessage(Component.text("Failed to mute member!").color(NamedTextColor.RED));
             }
         } catch (Exception e) {
             player.sendMessage(Component.text("Failed to mute member: " + e.getMessage()).color(NamedTextColor.RED));
         }
 
         return true;
+    }
+
+
+    private int parseDuration(String durationStr) throws IllegalArgumentException {
+        if (durationStr == null || durationStr.trim().isEmpty()) {
+            return 60;
+        }
+
+        durationStr = durationStr.trim().toLowerCase();
+
+        try {
+            return Integer.parseInt(durationStr);
+        } catch (NumberFormatException e) {
+        }
+
+        if (durationStr.length() < 2) {
+            throw new IllegalArgumentException("Invalid duration format");
+        }
+
+        String unit = durationStr.substring(durationStr.length() - 1);
+        String numberPart = durationStr.substring(0, durationStr.length() - 1);
+
+        int value;
+        try {
+            value = Integer.parseInt(numberPart);
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException("Invalid number in duration: " + numberPart);
+        }
+
+        if (value <= 0) {
+            throw new IllegalArgumentException("Duration must be positive");
+        }
+
+        switch (unit) {
+            case "m":
+                return value;
+            case "h":
+                return value * 60;
+            case "d":
+                return value * 60 * 24;
+            case "w":
+                return value * 60 * 24 * 7;
+            default:
+                throw new IllegalArgumentException("Invalid time unit: " + unit + ". Use m (minutes), h (hours), d (days), or w (weeks)");
+        }
+    }
+
+
+    private String formatDuration(int minutes) {
+        if (minutes < 60) {
+            return minutes + " minute" + (minutes != 1 ? "s" : "");
+        } else if (minutes < 1440) {
+            int hours = minutes / 60;
+            int remainingMinutes = minutes % 60;
+            if (remainingMinutes == 0) {
+                return hours + " hour" + (hours != 1 ? "s" : "");
+            } else {
+                return hours + " hour" + (hours != 1 ? "s" : "") + " and " +
+                       remainingMinutes + " minute" + (remainingMinutes != 1 ? "s" : "");
+            }
+        } else {
+            int days = minutes / 1440;
+            int remainingHours = (minutes % 1440) / 60;
+            if (remainingHours == 0) {
+                return days + " day" + (days != 1 ? "s" : "");
+            } else {
+                return days + " day" + (days != 1 ? "s" : "") + " and " +
+                       remainingHours + " hour" + (remainingHours != 1 ? "s" : "");
+            }
+        }
     }
 
     private boolean handleDeleteGroup(Player player, String[] args) {
@@ -1460,7 +1549,6 @@ public class GroupCommandHandler implements CommandExecutor, TabCompleter {
             return true;
         }
 
-        // Implementation would need to be added to GroupManager
         player.sendMessage(Component.text("Group chat cleared!").color(NamedTextColor.GREEN));
         return true;
     }
@@ -1653,7 +1741,6 @@ public class GroupCommandHandler implements CommandExecutor, TabCompleter {
             if (groupMotd == null) groupMotd = "";
             if (inviteCode == null) inviteCode = "";
 
-            // Handle lists
             List<String> allowedRanks = doc.getList("allowedRanks", String.class);
             if (allowedRanks == null) allowedRanks = new ArrayList<>();
 
@@ -1697,7 +1784,6 @@ public class GroupCommandHandler implements CommandExecutor, TabCompleter {
                 mutedMembers,
                 bannedMembers,
                 groupMotd,
-                new ArrayList<>(), // announcements
                 inviteCode
             );
         } catch (Exception e) {

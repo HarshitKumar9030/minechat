@@ -16,6 +16,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import org.bson.Document;
@@ -45,12 +46,48 @@ public class KickMemberHandler implements HttpHandler {
 
         try {
             if ("POST".equals(exchange.getRequestMethod())) {
-                handleKickMember(exchange);
+                String path = exchange.getRequestURI().getPath();
+                
+                switch (path) {
+                    case "/api/kick-member":
+                        handleKickMember(exchange);
+                        break;
+                    case "/api/ban-member":
+                        handleBanMember(exchange);
+                        break;
+                    case "/api/mute-member":
+                        handleMuteMember(exchange);
+                        break;
+                    case "/api/unmute-member":
+                        handleUnmuteMember(exchange);
+                        break;
+                    case "/api/promote-member":
+                        handlePromoteMember(exchange);
+                        break;
+                    case "/api/demote-member":
+                        handleDemoteMember(exchange);
+                        break;
+                    case "/api/update-group-motd":
+                        handleUpdateMOTD(exchange);
+                        break;
+                    case "/api/add-announcement":
+                        handleAddAnnouncement(exchange);
+                        break;
+                    case "/api/update-announcement":
+                        handleUpdateAnnouncement(exchange);
+                        break;
+                    case "/api/remove-announcement":
+                        handleRemoveAnnouncement(exchange);
+                        break;
+                    default:
+                        sendErrorResponse(exchange, 404, "Endpoint not found");
+                        break;
+                }
             } else {
                 sendErrorResponse(exchange, 405, "Method not allowed");
             }
         } catch (Exception e) {
-            plugin.getLogger().severe("Error in KickMemberHandler: " + e.getMessage());
+            plugin.getLogger().severe("Error in ModerationHandler: " + e.getMessage());
             e.printStackTrace();
             sendErrorResponse(exchange, 500, "Internal server error");
         }
@@ -102,7 +139,6 @@ public class KickMemberHandler implements HttpHandler {
             boolean success = groupManager.kickMember(groupUUID, targetId, adminId, reason);
 
             if (success) {
-                // Notify online group members
                 Bukkit.getScheduler().runTask(plugin, () -> {
                     String adminName = getPlayerNameByUUID(adminId);
                     String targetName = getPlayerNameByUUID(targetId);
@@ -119,12 +155,10 @@ public class KickMemberHandler implements HttpHandler {
                                     onlineMember.sendMessage("§e" + targetName + " was kicked from " + groupName + " by " + adminName + " (via web)");
                                 }
                             } catch (IllegalArgumentException e) {
-                                // Skip invalid UUIDs
                             }
                         }
                     }
 
-                    // notify kicked player if online
                     Player kickedPlayer = Bukkit.getPlayer(targetId);
                     if (kickedPlayer != null && kickedPlayer.isOnline()) {
                         kickedPlayer.sendMessage("§cYou were kicked from " + groupName + " by " + adminName + ". Reason: " + reason);
@@ -150,7 +184,6 @@ public class KickMemberHandler implements HttpHandler {
     }
 
     private String getPlayerNameByUUID(UUID playerUUID) {
-        // try to get from online players first
         Player player = Bukkit.getPlayer(playerUUID);
         if (player != null) {
             return player.getName();
@@ -183,6 +216,363 @@ public class KickMemberHandler implements HttpHandler {
         exchange.sendResponseHeaders(statusCode, responseBytes.length);
         try (OutputStream os = exchange.getResponseBody()) {
             os.write(responseBytes);
+        }
+    }
+
+    private void handleBanMember(HttpExchange exchange) throws IOException {
+        try {
+            InputStream inputStream = exchange.getRequestBody();
+            String requestBody = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
+            JsonObject json = JsonParser.parseString(requestBody).getAsJsonObject();
+
+            String groupId = json.has("groupId") && !json.get("groupId").isJsonNull() ? json.get("groupId").getAsString() : null;
+            String adminUUID = json.has("adminUUID") && !json.get("adminUUID").isJsonNull() ? json.get("adminUUID").getAsString() : null;
+            String targetUUID = json.has("targetUUID") && !json.get("targetUUID").isJsonNull() ? json.get("targetUUID").getAsString() : null;
+            String reason = json.has("reason") && !json.get("reason").isJsonNull() ? json.get("reason").getAsString() : "No reason provided";
+
+            if (groupId == null || adminUUID == null || targetUUID == null) {
+                sendErrorResponse(exchange, 400, "Missing required parameters: groupId, adminUUID, or targetUUID");
+                return;
+            }
+
+            UUID groupUUID = UUID.fromString(groupId);
+            UUID adminId = UUID.fromString(adminUUID);
+            UUID targetId = UUID.fromString(targetUUID);
+
+            boolean success = groupManager.banMember(groupUUID, targetId, adminId, reason);
+
+            JsonObject response = new JsonObject();
+            response.addProperty("success", success);
+            response.addProperty("message", success ? "Member banned successfully" : "Failed to ban member");
+            sendJsonResponse(exchange, success ? 200 : 500, response);
+        } catch (Exception e) {
+            plugin.getLogger().severe("Error banning member: " + e.getMessage());
+            sendErrorResponse(exchange, 500, "Internal server error");
+        }
+    }
+
+    private void handleMuteMember(HttpExchange exchange) throws IOException {
+        try {
+            InputStream inputStream = exchange.getRequestBody();
+            String requestBody = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
+            JsonObject json = JsonParser.parseString(requestBody).getAsJsonObject();
+
+            String groupId = json.has("groupId") && !json.get("groupId").isJsonNull() ? json.get("groupId").getAsString() : null;
+            String adminUUID = json.has("adminUUID") && !json.get("adminUUID").isJsonNull() ? json.get("adminUUID").getAsString() : null;
+            String targetUUID = json.has("targetUUID") && !json.get("targetUUID").isJsonNull() ? json.get("targetUUID").getAsString() : null;
+            int duration = json.has("duration") && !json.get("duration").isJsonNull() ? json.get("duration").getAsInt() : 60; // default 60 minutes
+
+            if (groupId == null || adminUUID == null || targetUUID == null) {
+                sendErrorResponse(exchange, 400, "Missing required parameters: groupId, adminUUID, or targetUUID");
+                return;
+            }
+
+            UUID groupUUID = UUID.fromString(groupId);
+            UUID adminId = UUID.fromString(adminUUID);
+            UUID targetId = UUID.fromString(targetUUID);
+
+            boolean success = groupManager.muteMember(groupUUID, targetId, adminId, duration);
+
+            JsonObject response = new JsonObject();
+            response.addProperty("success", success);
+            response.addProperty("message", success ? "Member muted successfully" : "Failed to mute member");
+            sendJsonResponse(exchange, success ? 200 : 500, response);
+        } catch (Exception e) {
+            plugin.getLogger().severe("Error muting member: " + e.getMessage());
+            sendErrorResponse(exchange, 500, "Internal server error");
+        }
+    }
+
+    private void handleUnmuteMember(HttpExchange exchange) throws IOException {
+        try {
+            InputStream inputStream = exchange.getRequestBody();
+            String requestBody = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
+            JsonObject json = JsonParser.parseString(requestBody).getAsJsonObject();
+
+            String groupId = json.has("groupId") && !json.get("groupId").isJsonNull() ? json.get("groupId").getAsString() : null;
+            String adminUUID = json.has("adminUUID") && !json.get("adminUUID").isJsonNull() ? json.get("adminUUID").getAsString() : null;
+            String targetUUID = json.has("targetUUID") && !json.get("targetUUID").isJsonNull() ? json.get("targetUUID").getAsString() : null;
+
+            if (groupId == null || adminUUID == null || targetUUID == null) {
+                sendErrorResponse(exchange, 400, "Missing required parameters: groupId, adminUUID, or targetUUID");
+                return;
+            }
+
+            UUID groupUUID = UUID.fromString(groupId);
+            UUID adminId = UUID.fromString(adminUUID);
+            UUID targetId = UUID.fromString(targetUUID);
+
+            boolean success = groupManager.unmuteMember(groupUUID, targetId, adminId);
+
+            JsonObject response = new JsonObject();
+            response.addProperty("success", success);
+            response.addProperty("message", success ? "Member unmuted successfully" : "Failed to unmute member");
+            sendJsonResponse(exchange, success ? 200 : 500, response);
+        } catch (Exception e) {
+            plugin.getLogger().severe("Error unmuting member: " + e.getMessage());
+            sendErrorResponse(exchange, 500, "Internal server error");
+        }
+    }
+
+    private void handlePromoteMember(HttpExchange exchange) throws IOException {
+        try {
+            InputStream inputStream = exchange.getRequestBody();
+            String requestBody = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
+            JsonObject json = JsonParser.parseString(requestBody).getAsJsonObject();
+
+            String groupId = json.has("groupId") && !json.get("groupId").isJsonNull() ? json.get("groupId").getAsString() : null;
+            String adminUUID = json.has("adminUUID") && !json.get("adminUUID").isJsonNull() ? json.get("adminUUID").getAsString() : null;
+            String targetUUID = json.has("targetUUID") && !json.get("targetUUID").isJsonNull() ? json.get("targetUUID").getAsString() : null;
+
+            if (groupId == null || adminUUID == null || targetUUID == null) {
+                sendErrorResponse(exchange, 400, "Missing required parameters: groupId, adminUUID, or targetUUID");
+                return;
+            }
+
+            UUID groupUUID = UUID.fromString(groupId);
+            UUID adminId = UUID.fromString(adminUUID);
+            UUID targetId = UUID.fromString(targetUUID);
+
+            boolean success = groupManager.promoteGroupMember(groupUUID, targetId);
+
+            JsonObject response = new JsonObject();
+            response.addProperty("success", success);
+            response.addProperty("message", success ? "Member promoted successfully" : "Failed to promote member");
+            sendJsonResponse(exchange, success ? 200 : 500, response);
+        } catch (Exception e) {
+            plugin.getLogger().severe("Error promoting member: " + e.getMessage());
+            sendErrorResponse(exchange, 500, "Internal server error");
+        }
+    }
+
+    private void handleDemoteMember(HttpExchange exchange) throws IOException {
+        try {
+            InputStream inputStream = exchange.getRequestBody();
+            String requestBody = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
+            JsonObject json = JsonParser.parseString(requestBody).getAsJsonObject();
+
+            String groupId = json.has("groupId") && !json.get("groupId").isJsonNull() ? json.get("groupId").getAsString() : null;
+            String adminUUID = json.has("adminUUID") && !json.get("adminUUID").isJsonNull() ? json.get("adminUUID").getAsString() : null;
+            String targetUUID = json.has("targetUUID") && !json.get("targetUUID").isJsonNull() ? json.get("targetUUID").getAsString() : null;
+
+            if (groupId == null || adminUUID == null || targetUUID == null) {
+                sendErrorResponse(exchange, 400, "Missing required parameters: groupId, adminUUID, or targetUUID");
+                return;
+            }
+
+            UUID groupUUID = UUID.fromString(groupId);
+            UUID adminId = UUID.fromString(adminUUID);
+            UUID targetId = UUID.fromString(targetUUID);
+
+            boolean success = groupManager.demoteMember(groupUUID, targetId, adminId);
+
+            JsonObject response = new JsonObject();
+            response.addProperty("success", success);
+            response.addProperty("message", success ? "Member demoted successfully" : "Failed to demote member");
+            sendJsonResponse(exchange, success ? 200 : 500, response);
+        } catch (Exception e) {
+            plugin.getLogger().severe("Error demoting member: " + e.getMessage());
+            sendErrorResponse(exchange, 500, "Internal server error");
+        }
+    }
+
+    private void handleUpdateMOTD(HttpExchange exchange) throws IOException {
+        try {
+            InputStream inputStream = exchange.getRequestBody();
+            String requestBody = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
+            JsonObject json = JsonParser.parseString(requestBody).getAsJsonObject();
+
+            String groupId = json.has("groupId") && !json.get("groupId").isJsonNull() ? json.get("groupId").getAsString() : null;
+            String adminUUID = json.has("adminUUID") && !json.get("adminUUID").isJsonNull() ? json.get("adminUUID").getAsString() : null;
+            String motd = json.has("motd") && !json.get("motd").isJsonNull() ? json.get("motd").getAsString() : null;
+
+            if (groupId == null || motd == null) {
+                sendErrorResponse(exchange, 400, "Missing required parameters: groupId or motd");
+                return;
+            }
+
+            UUID groupUUID = UUID.fromString(groupId);
+            UUID adminId = UUID.fromString(adminUUID);
+
+            boolean success = groupManager.updateGroupMOTD(groupUUID, motd);
+
+            JsonObject response = new JsonObject();
+            response.addProperty("success", success);
+            response.addProperty("message", success ? "MOTD updated successfully" : "Failed to update MOTD");
+            sendJsonResponse(exchange, success ? 200 : 500, response);
+        } catch (Exception e) {
+            plugin.getLogger().severe("Error updating MOTD: " + e.getMessage());
+            sendErrorResponse(exchange, 500, "Internal server error");
+        }
+    }
+
+    private void handleAddAnnouncement(HttpExchange exchange) throws IOException {
+        try {
+            InputStream inputStream = exchange.getRequestBody();
+            String requestBody = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
+            JsonObject json = JsonParser.parseString(requestBody).getAsJsonObject();
+
+            String groupId = json.has("groupId") && !json.get("groupId").isJsonNull() ? json.get("groupId").getAsString() : null;
+            String announcement = json.has("announcement") && !json.get("announcement").isJsonNull() ? json.get("announcement").getAsString() : null;
+            String adminUUID = json.has("adminUUID") && !json.get("adminUUID").isJsonNull() ? json.get("adminUUID").getAsString() : null;
+
+            if (groupId == null || announcement == null || adminUUID == null) {
+                sendErrorResponse(exchange, 400, "Missing required parameters: groupId, announcement, or adminUUID");
+                return;
+            }
+
+            UUID groupUUID = UUID.fromString(groupId);
+            UUID adminUserUUID = UUID.fromString(adminUUID);
+
+            if (!groupManager.isAdminOrOwner(groupUUID, adminUserUUID)) {
+                sendErrorResponse(exchange, 403, "Permission denied");
+                return;
+            }
+
+            Document group = groupManager.getGroup(groupUUID);
+            if (group == null) {
+                sendErrorResponse(exchange, 404, "Group not found");
+                return;
+            }
+
+            Document settings = group.get("settings", Document.class);
+            List<String> announcements = new ArrayList<>();
+            
+            if (settings != null) {
+                List<String> existing = settings.getList("announcements", String.class);
+                if (existing != null) {
+                    announcements.addAll(existing);
+                }
+            }
+
+            announcements.add(announcement.trim());
+
+            boolean success = groupManager.updateGroupAnnouncements(groupUUID, announcements);
+
+            JsonObject response = new JsonObject();
+            response.addProperty("success", success);
+            response.addProperty("message", success ? "Announcement added successfully" : "Failed to add announcement");
+            sendJsonResponse(exchange, success ? 200 : 500, response);
+        } catch (Exception e) {
+            plugin.getLogger().severe("Error adding announcement: " + e.getMessage());
+            sendErrorResponse(exchange, 500, "Internal server error");
+        }
+    }
+
+    private void handleUpdateAnnouncement(HttpExchange exchange) throws IOException {
+        try {
+            InputStream inputStream = exchange.getRequestBody();
+            String requestBody = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
+            JsonObject json = JsonParser.parseString(requestBody).getAsJsonObject();
+
+            String groupId = json.has("groupId") && !json.get("groupId").isJsonNull() ? json.get("groupId").getAsString() : null;
+            String announcement = json.has("announcement") && !json.get("announcement").isJsonNull() ? json.get("announcement").getAsString() : null;
+            Integer index = json.has("index") && !json.get("index").isJsonNull() ? json.get("index").getAsInt() : null;
+            String adminUUID = json.has("adminUUID") && !json.get("adminUUID").isJsonNull() ? json.get("adminUUID").getAsString() : null;
+
+            if (groupId == null || announcement == null || index == null || adminUUID == null) {
+                sendErrorResponse(exchange, 400, "Missing required parameters: groupId, announcement, index, or adminUUID");
+                return;
+            }
+
+            UUID groupUUID = UUID.fromString(groupId);
+            UUID adminUserUUID = UUID.fromString(adminUUID);
+
+            if (!groupManager.isAdminOrOwner(groupUUID, adminUserUUID)) {
+                sendErrorResponse(exchange, 403, "Permission denied");
+                return;
+            }
+
+            Document group = groupManager.getGroup(groupUUID);
+            if (group == null) {
+                sendErrorResponse(exchange, 404, "Group not found");
+                return;
+            }
+
+            Document settings = group.get("settings", Document.class);
+            List<String> announcements = new ArrayList<>();
+            
+            if (settings != null) {
+                List<String> existing = settings.getList("announcements", String.class);
+                if (existing != null) {
+                    announcements.addAll(existing);
+                }
+            }
+
+            if (index < 0 || index >= announcements.size()) {
+                sendErrorResponse(exchange, 400, "Invalid announcement index");
+                return;
+            }
+
+            announcements.set(index, announcement.trim());
+
+            boolean success = groupManager.updateGroupAnnouncements(groupUUID, announcements);
+
+            JsonObject response = new JsonObject();
+            response.addProperty("success", success);
+            response.addProperty("message", success ? "Announcement updated successfully" : "Failed to update announcement");
+            sendJsonResponse(exchange, success ? 200 : 500, response);
+        } catch (Exception e) {
+            plugin.getLogger().severe("Error updating announcement: " + e.getMessage());
+            sendErrorResponse(exchange, 500, "Internal server error");
+        }
+    }
+
+    private void handleRemoveAnnouncement(HttpExchange exchange) throws IOException {
+        try {
+            InputStream inputStream = exchange.getRequestBody();
+            String requestBody = new String(inputStream.readAllBytes(), StandardCharsets.UTF_8);
+            JsonObject json = JsonParser.parseString(requestBody).getAsJsonObject();
+
+            String groupId = json.has("groupId") && !json.get("groupId").isJsonNull() ? json.get("groupId").getAsString() : null;
+            Integer index = json.has("index") && !json.get("index").isJsonNull() ? json.get("index").getAsInt() : null;
+            String adminUUID = json.has("adminUUID") && !json.get("adminUUID").isJsonNull() ? json.get("adminUUID").getAsString() : null;
+
+            if (groupId == null || index == null || adminUUID == null) {
+                sendErrorResponse(exchange, 400, "Missing required parameters: groupId, index, or adminUUID");
+                return;
+            }
+
+            UUID groupUUID = UUID.fromString(groupId);
+            UUID adminUserUUID = UUID.fromString(adminUUID);
+
+            if (!groupManager.isAdminOrOwner(groupUUID, adminUserUUID)) {
+                sendErrorResponse(exchange, 403, "Permission denied");
+                return;
+            }
+
+            Document group = groupManager.getGroup(groupUUID);
+            if (group == null) {
+                sendErrorResponse(exchange, 404, "Group not found");
+                return;
+            }
+
+            Document settings = group.get("settings", Document.class);
+            List<String> announcements = new ArrayList<>();
+            
+            if (settings != null) {
+                List<String> existing = settings.getList("announcements", String.class);
+                if (existing != null) {
+                    announcements.addAll(existing);
+                }
+            }
+
+            if (index < 0 || index >= announcements.size()) {
+                sendErrorResponse(exchange, 400, "Invalid announcement index");
+                return;
+            }
+
+            announcements.remove(index.intValue());
+
+            boolean success = groupManager.updateGroupAnnouncements(groupUUID, announcements);
+
+            JsonObject response = new JsonObject();
+            response.addProperty("success", success);
+            response.addProperty("message", success ? "Announcement removed successfully" : "Failed to remove announcement");
+            sendJsonResponse(exchange, success ? 200 : 500, response);
+        } catch (Exception e) {
+            plugin.getLogger().severe("Error removing announcement: " + e.getMessage());
+            sendErrorResponse(exchange, 500, "Internal server error");
         }
     }
 }
