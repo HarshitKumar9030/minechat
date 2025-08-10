@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Mail, Check, X, Clock, Users } from 'lucide-react';
 import { api, GroupInvite } from '@/lib/api';
 
@@ -15,13 +15,7 @@ const GroupInvites: React.FC<GroupInvitesProps> = ({
   const [loading, setLoading] = useState(true);
   const [processingInvite, setProcessingInvite] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (user) {
-      loadInvites();
-    }
-  }, [user]);
-
-  const loadInvites = async () => {
+  const loadInvites = useCallback(async () => {
     if (!user) return;
 
     try {
@@ -35,7 +29,13 @@ const GroupInvites: React.FC<GroupInvitesProps> = ({
     } finally {
       setLoading(false);
     }
-  };
+  }, [user]);
+
+  useEffect(() => {
+    if (user) {
+      loadInvites();
+    }
+  }, [user, loadInvites]);
 
   const handleAcceptInvite = async (invite: GroupInvite) => {
     if (!user || processingInvite) return;
@@ -95,7 +95,7 @@ const GroupInvites: React.FC<GroupInvitesProps> = ({
       <div className="flex items-center gap-3">
         <Mail className="w-6 h-6 text-yellow-600" />
         <div>
-          <h2 className="text-2xl font-bold text-neutral-100 font-minecraftia">
+          <h2 className="text-2xl font-bold text-neutral-100 pt-2 font-minecraftia">
             Group Invites
           </h2>
           <p className="text-neutral-400 mt-1">
@@ -137,20 +137,20 @@ const GroupInvites: React.FC<GroupInvitesProps> = ({
           invites.map((invite) => (
             <div
               key={invite.inviteId}
-              className="bg-neutral-800 border border-neutral-700 rounded-lg p-6 hover:border-neutral-600 transition-all duration-300"
+              className="bg-neutral-800 border border-neutral-700 rounded-lg p-4 sm:p-6 hover:border-neutral-600 transition-all duration-300"
             >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 bg-gradient-to-br from-yellow-600 to-yellow-700 rounded-lg flex items-center justify-center">
-                    <Users className="w-6 h-6 text-neutral-900" />
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+                  <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-yellow-600 to-yellow-700 rounded-lg flex items-center justify-center flex-shrink-0">
+                    <Users className="w-5 h-5 sm:w-6 sm:h-6 text-neutral-900" />
                   </div>
-                  <div>
-                    <h3 className="font-minecraftia text-lg text-neutral-100">
+                  <div className="min-w-0 flex-1">
+                    <h3 className="font-minecraftia text-base sm:text-lg text-neutral-100 truncate">
                       {invite.groupName}
                     </h3>
-                    <div className="flex items-center gap-2 text-sm text-neutral-400">
-                      <span>Invited by {invite.inviterName}</span>
-                      <span>•</span>
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 text-xs sm:text-sm text-neutral-400">
+                      <span className="truncate">Invited by {invite.inviterName}</span>
+                      <span className="hidden sm:inline">•</span>
                       <span className="flex items-center gap-1">
                         <Clock className="w-3 h-3" />
                         {formatTimestamp(invite.timestamp)}
@@ -159,30 +159,30 @@ const GroupInvites: React.FC<GroupInvitesProps> = ({
                   </div>
                 </div>
 
-                <div className="flex gap-2">
+                <div className="flex gap-2 justify-end sm:justify-start">
                   <button
                     onClick={() => handleDeclineInvite(invite)}
                     disabled={processingInvite === invite.inviteId}
-                    className="px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-neutral-600 disabled:cursor-not-allowed text-white rounded-lg transition-colors flex items-center gap-2"
+                    className="px-3 py-2 sm:px-4 bg-red-600 hover:bg-red-700 disabled:bg-neutral-600 disabled:cursor-not-allowed text-white rounded-lg transition-colors flex items-center gap-2 text-sm"
                   >
                     {processingInvite === invite.inviteId ? (
                       <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                     ) : (
                       <X className="w-4 h-4" />
                     )}
-                    Decline
+                    <span className="hidden sm:inline">Decline</span>
                   </button>
                   <button
                     onClick={() => handleAcceptInvite(invite)}
                     disabled={processingInvite === invite.inviteId}
-                    className="px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-neutral-600 disabled:cursor-not-allowed text-white rounded-lg transition-colors flex items-center gap-2"
+                    className="px-3 py-2 sm:px-4 bg-green-600 hover:bg-green-700 disabled:bg-neutral-600 disabled:cursor-not-allowed text-white rounded-lg transition-colors flex items-center gap-2 text-sm"
                   >
                     {processingInvite === invite.inviteId ? (
                       <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                     ) : (
                       <Check className="w-4 h-4" />
                     )}
-                    Accept
+                    <span className="hidden sm:inline">Accept</span>
                   </button>
                 </div>
               </div>

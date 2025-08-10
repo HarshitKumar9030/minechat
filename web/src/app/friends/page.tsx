@@ -245,10 +245,10 @@ const FriendsPage = () => {
               <ArrowLeft className="h-4 w-4 md:h-5 md:w-5 text-neutral-400" />
             </button>
             <div className="min-w-0">
-              <h1 className="text-xl md:text-2xl lg:text-3xl font-minecraftia text-neutral-300 leading-none">
+              <h1 className="text-xl md:text-2xl lg:text-3xl font-minecraftia text-neutral-300">
                 Friends on <span className='text-yellow-600'>{SERVER_NAME}</span>
               </h1>
-              <p className="text-neutral-500 font-minecraftia text-xs md:text-sm tracking-wide leading-none mt-3">
+              <p className="text-neutral-500 font-minecraftia text-xs md:text-sm tracking-wide mt-1">
                 Manage your friend list and connections
               </p>
             </div>
@@ -269,23 +269,23 @@ const FriendsPage = () => {
             </button>
             <button
               onClick={() => setShowAddModal(true)}
-              className="flex items-center gap-2 px-3 py-2 md:px-4 md:py-3 bg-yellow-600 hover:bg-yellow-700 text-neutral-900 font-minecraftia text-xs md:text-sm rounded-lg transition-all duration-300 leading-none"
+              className="flex items-center gap-2 px-3 py-2 md:px-4 md:py-3 bg-yellow-600 hover:bg-yellow-700 text-neutral-900 font-inter text-xs md:text-sm rounded-lg transition-all duration-300"
             >
               <Plus className="h-3 w-3 md:h-4 md:w-4" />
-              <span className="hidden mt-2 sm:inline">Add Friend</span>
-              <span className="sm:hidden mt-2">Add</span>
+              <span className="hidden font-semibold sm:inline">Add Friend</span>
+              <span className="sm:hidden">Add</span>
             </button>
           </div>
         </div>
 
         <div className="relative w-full max-w-md flex items-center animate-in slide-in-from-left-3 duration-300 delay-100">
-          <Search className="absolute left-3 top-3/5  transform -translate-y-1/2 h-4 w-4 text-neutral-500" />
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-neutral-500" />
           <input
             type="text"
             placeholder="Search friends..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 font-inter md:py-3 bg-neutral-800 border border-neutral-700 rounded-lg text-neutral-200 placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-yellow-600 focus:border-transparent  text-sm leading-none mt-3 transition-all duration-300"
+            className="w-full pl-10 pr-4 py-2 md:py-3 bg-neutral-800 border border-neutral-700 rounded-lg text-neutral-200 placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-yellow-600 focus:border-transparent text-sm transition-all duration-300"
           />
         </div>
 
@@ -294,7 +294,7 @@ const FriendsPage = () => {
             <div className="flex flex-col sm:flex-row sm:items-center gap-2 md:gap-3">
               <Users className="h-6 w-6 md:h-8 md:w-8 text-yellow-600 flex-shrink-0" />
               <div className="min-w-0">
-                <h3 className="text-lg md:text-2xl font-minecraftia text-neutral-200 mt-2 leading-none">
+                <h3 className="text-lg md:text-2xl font-minecraftia text-neutral-200">
                   {friendStats?.friendCount ?? friends.length}
                   {friendStats?.maxFriends && (
                     <span className="text-neutral-500 text-sm ml-1">
@@ -302,7 +302,7 @@ const FriendsPage = () => {
                     </span>
                   )}
                 </h3>
-                <p className="text-neutral-400 font-minecraftia  text-xs md:text-sm leading-4 md:leading-none mt-2 md:mt-3">
+                <p className="text-neutral-400 font-minecraftia text-xs md:text-sm mt-1">
                   Total Friends
                 </p>
               </div>
@@ -315,10 +315,10 @@ const FriendsPage = () => {
                 <div className="w-2 h-2 md:w-3 md:h-3 bg-white rounded-full animate-pulse" />
               </div>
               <div className="min-w-0">
-                <h3 className="text-lg md:text-2xl font-minecraftia text-neutral-200 mt-2 leading-none">
+                <h3 className="text-lg md:text-2xl font-minecraftia text-neutral-200">
                   {friends.filter(f => f.online).length}
                 </h3>
-                <p className="text-neutral-400  leading-4 md:leading-none font-minecraftia text-xs md:text-sm  mt-2 md:mt-3">
+                <p className="text-neutral-400 font-minecraftia text-xs md:text-sm mt-1">
                   Online Now
                 </p>
               </div>
@@ -329,10 +329,10 @@ const FriendsPage = () => {
             <div className="flex flex-col sm:flex-row sm:items-center gap-2 md:gap-3">
               <UserPlus className="h-6 w-6 md:h-8 md:w-8 text-blue-500 flex-shrink-0" />
               <div className="min-w-0">
-                <h3 className="text-lg md:text-2xl font-minecraftia text-neutral-200 mt-2 leading-none">
+                <h3 className="text-lg md:text-2xl font-minecraftia text-neutral-200">
                   {(friendStats?.pendingRequests ?? friendRequests.length) + (friendStats?.sentRequests ?? sentRequests.length)}
                 </h3>
-                <p className="text-neutral-400 leading-4 md:leading-none font-minecraftia text-xs md:text-sm  mt-2 md:mt-3">
+                <p className="text-neutral-400 font-minecraftia text-xs md:text-sm mt-1">
                   Friend Requests
                 </p>
               </div>
@@ -352,7 +352,7 @@ const FriendsPage = () => {
             <h3 className="text-lg md:text-xl font-minecraftia text-neutral-300 leading-none mb-2">
               {searchTerm ? 'No friends found' : 'No friends yet'}
             </h3>
-            <p className="text-neutral-400 font-minecraftia text-sm tracking-wide mt-3 max-w-sm md:max-w-md mx-auto px-4">
+            <p className="text-neutral-400 font-minecraftia text-sm tracking-wide mt-2 max-w-sm md:max-w-md mx-auto px-4">
               {searchTerm 
                 ? 'Try adjusting your search terms' 
                 : 'Start building your friend network by sending friend requests to other players!'
@@ -382,23 +382,23 @@ const FriendsPage = () => {
                     }`} />
                   </div>
 
-                  <h3 className="text-neutral-200 pt-2 font-minecraftia text-sm md:text-lg leading-none mb-1 truncate">
+                  <h3 className="text-neutral-200 font-minecraftia text-sm md:text-lg mb-1 truncate">
                     {friend.friendName}
                   </h3>
                   {friend.rank && (
-                    <p className="text-yellow-500 font-minecraftia text-xs leading-none mt-1 mb-2 truncate">
+                    <p className="text-yellow-500 font-minecraftia text-xs mb-1 truncate">
                       {friend.rank}
                     </p>
                   )}
-                  <p className="text-neutral-500 font-minecraftia text-xs leading-none mt-3">
+                  <p className="text-neutral-500 font-minecraftia text-xs">
                     {friend.online ? 'Online' : 'Offline'}
                   </p>
                   {friend.lastSeen && !friend.online && (
-                    <p className="text-neutral-600 font-minecraftia text-xs leading-none mt-2 hidden md:block">
+                    <p className="text-neutral-600 font-minecraftia text-xs mt-1 hidden md:block">
                       Last seen {new Date(friend.lastSeen).toLocaleDateString()}
                     </p>
                   )}
-                  <p className="text-neutral-600 font-minecraftia text-xs leading-none mt-2 hidden md:block">
+                  <p className="text-neutral-600 font-minecraftia text-xs mt-1 hidden md:block">
                     Since {new Date(friend.timestamp).toLocaleDateString()}
                   </p>
                 </div>
@@ -421,7 +421,6 @@ const FriendsPage = () => {
         )}
       </main>
 
-      {/* Modals */}
       <AddFriendModal
         isOpen={showAddModal}
         onClose={() => setShowAddModal(false)}

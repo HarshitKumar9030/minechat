@@ -22,8 +22,8 @@ export interface AuthResponse {
     formattedRank: string;
     online: boolean;
     loginTime: number;
-    lastSeen?: number;      // Add last seen to auth response
-    firstJoin?: number;     // Add first join to auth response
+    lastSeen?: number;     
+    firstJoin?: number;     
   };
   sessionToken?: string;
   error?: string;
@@ -56,6 +56,59 @@ export interface GroupInfo {
   memberCount: number;
   maxMembers: number;
   role: string;
+  createdAt?: number;
+  ownerId?: string;
+  ownerName?: string;
+  isPrivate?: boolean;
+  motd?: string; 
+  announcements?: string[]; 
+}
+
+export interface GroupMember {
+  playerUUID: string;
+  playerName: string;
+  role: 'OWNER' | 'ADMIN' | 'MEMBER';
+  joinedAt: number;
+  online: boolean;
+  rank?: string;
+  formattedRank?: string;
+}
+
+export interface GroupMessage {
+  messageId: string;
+  groupId: string;
+  senderUUID: string;
+  senderName: string;
+  content: string;
+  timestamp: number;
+  messageType?: 'TEXT' | 'SYSTEM' | 'ANNOUNCEMENT';
+  editedAt?: number;
+  rank?: string;
+  formattedRank?: string;
+}
+
+export interface GroupInvite {
+  inviteId: string;
+  groupId: string;
+  groupName: string;
+  inviterUUID: string;
+  inviterName: string;
+  inviteeUUID: string;
+  inviteeName: string;
+  timestamp: number;
+  status: 'PENDING' | 'ACCEPTED' | 'REJECTED' | 'EXPIRED';
+  message?: string;
+}
+
+export interface GroupSettings {
+  groupId: string;
+  maxMembers: number;
+  isPrivate: boolean;
+  joinRequiresApproval: boolean;
+  membersCanInvite: boolean;
+  allowedRanks: string[];
+  mutedMembers: string[];
+  bannedMembers: string[];
 }
 
 export class MinechatAPI {
@@ -77,19 +130,26 @@ export class MinechatAPI {
 
     try {
       const response = await fetch(url, config);
-      const data = await response.json();
       
-      // Check if the response status indicates an error
       if (!response.ok) {
-        // Create an error object that includes the response data
-        const error = new Error(data.error || `HTTP ${response.status}: ${response.statusText}`);
-        (error as any).response = { data, status: response.status };
+        const data = await response.json().catch(() => ({ error: `HTTP ${response.status}: ${response.statusText}` }));
+        const error = new Error(data.message || data.error || `HTTP ${response.status}: ${response.statusText}`);
+        (error as any).response = data;
+        (error as any).status = response.status;
         throw error;
       }
       
+      const data = await response.json();
       return data;
     } catch (error) {
       console.error('API request failed:', error);
+      
+      if (error instanceof TypeError && error.message.includes('fetch')) {
+        const connectionError = new Error('Unable to connect to the Minechat server. Please ensure the server is running and accessible.');
+        (connectionError as any).isConnectionError = true;
+        throw connectionError;
+      }
+      
       throw error;
     }
   }
@@ -303,71 +363,389 @@ export class MinechatAPI {
     });
   }
 
-  async getUserGroups(playerUUID: string): Promise<{ groups: GroupInfo[] }> {
-    return this.request<{ groups: GroupInfo[] }>(`/groups?playerUUID=${playerUUID}`);
+  async sendFriendMessage(data: {
+    senderUUID: string;
+    senderName: string;
+    targetName?: string;
+    targetUUID?: string;
+    message: string;
+  }) {
+    return this.request('/send-friend-message', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
   }
 
-  async createGroup(ownerUUID: string, ownerName: string, groupName: string, description: string, maxMembers: number) {
+  async getPrivateMessages(player1: string, player2: string, limit = 100): Promise<{ messages: any[] }> {
+    return this.request(`/private-messages?player1=${encodeURIComponent(player1)}&player2=${encodeURIComponent(player2)}&limit=${limit}`);
+  }
+
+
+  async getUserGroups(playerUUID: string): Promise<{ groups: GroupInfo[] }> {
+    const response = await this.request<{ groups: any[] }>(`/groups?playerUUID=${playerUUID}`);
+
+    const groups = response.groups.map(group => ({
+      groupId: group.groupId,
+      groupName: group.groupName,
+      description: group.description || '',
+      memberCount: group.memberCount || 0,
+      maxMembers: group.maxMembers || 20,
+      role: (group.role || 'MEMBER').toUpperCase(),
+      createdAt: group.createdAt,
+      ownerId: group.ownerId,
+      ownerName: group.ownerName,
+      isPrivate: group.isPrivate || false
+    }));
+
+    return { groups };
+  }
+
+  async getGroupDetails(groupId: string): Promise<{ group: GroupInfo }> {
+    return this.request<{ group: GroupInfo }>(`/group-details?groupId=${groupId}`);
+  }
+
+  async getAllPublicGroups(): Promise<{ groups: GroupInfo[] }> {
+    return this.request<{ groups: GroupInfo[] }>('/public-groups');
+  }
+
+  async searchGroups(query: string, limit: number = 10): Promise<{ groups: GroupInfo[] }> {
+    const response = await this.request<{ groups: any[] }>(`/search-groups?query=${encodeURIComponent(query)}&limit=${limit}`);
+
+    const groups = response.groups.map(group => ({
+      groupId: group.groupId,
+      groupName: group.groupName,
+      description: group.description || '',
+      memberCount: group.memberCount || 0,
+      maxMembers: group.maxMembers || 20,
+      role: 'GUEST', 
+      createdAt: group.createdAt,
+      ownerId: group.ownerId,
+      ownerName: group.ownerName,
+      isPrivate: group.isPrivate || false
+    }));
+
+    return { groups };
+  }
+
+  async createGroup(data: {
+    ownerUUID: string;
+    ownerName: string;
+    groupName: string;
+    description: string;
+    maxMembers: number;
+    isPrivate?: boolean;
+  }) {
     return this.request('/create-group', {
       method: 'POST',
-      body: JSON.stringify({ ownerUUID, ownerName, groupName, description, maxMembers }),
+      body: JSON.stringify({
+        creatorUUID: data.ownerUUID,
+        creatorName: data.ownerName,
+        groupName: data.groupName,
+        description: data.description,
+        maxMembers: data.maxMembers,
+        isPrivate: data.isPrivate || false,
+      }),
     });
   }
 
-  async joinGroup(playerUUID: string, playerName: string, groupName: string) {
+  async updateGroup(groupId: string, data: {
+    groupName?: string;
+    description?: string;
+    maxMembers?: number;
+    isPrivate?: boolean;
+    motd?: string;
+    announcements?: string[];
+  }) {
+    return this.request(`/update-group`, {
+      method: 'POST',
+      body: JSON.stringify({ groupId, ...data }),
+    });
+  }
+
+  async deleteGroup(groupId: string, ownerUUID: string) {
+    return this.request('/delete-group', {
+      method: 'POST',
+      body: JSON.stringify({ groupId, ownerUUID }),
+    });
+  }
+
+  async getGroupMembers(groupId: string): Promise<{ members: GroupMember[] }> {
+    const response = await this.request<{ members: any[] }>(`/group-members?groupId=${groupId}`);
+
+    const members = response.members.map(member => ({
+      playerUUID: member.playerUUID,
+      playerName: member.playerName,
+      role: (member.role || 'MEMBER').toUpperCase(),
+      joinedAt: member.joinedAt,
+      online: member.online || false,
+      rank: member.rank,
+      formattedRank: member.formattedRank
+    }));
+
+    return { members };
+  }
+
+  async joinGroup(playerUUID: string, playerName: string, groupId: string) {
     return this.request('/join-group', {
       method: 'POST',
-      body: JSON.stringify({ playerUUID, playerName, groupName }),
+      body: JSON.stringify({ playerUUID, playerName, groupId }),
     });
   }
 
-  async leaveGroup(playerUUID: string, groupName: string) {
+  async joinGroupByCode(playerUUID: string, playerName: string, inviteCode: string) {
+    return this.request('/join-group-by-code', {
+      method: 'POST',
+      body: JSON.stringify({ playerUUID, playerName, inviteCode }),
+    });
+  }
+
+  async leaveGroup(playerUUID: string, groupId: string) {
     return this.request('/leave-group', {
       method: 'POST',
-      body: JSON.stringify({ playerUUID, groupName }),
+      body: JSON.stringify({ playerUUID, groupId }),
     });
   }
 
-  async getGroupMessages(groupId: string, limit: number = 50) {
-    return this.request(`/messages?groupId=${groupId}&limit=${limit}`);
+  async kickMember(groupId: string, adminUUID: string, targetUUID: string, reason?: string) {
+    return this.request('/kick-member', {
+      method: 'POST',
+      body: JSON.stringify({ groupId, adminUUID, targetUUID, reason }),
+    });
+  }
+
+  async banMember(groupId: string, adminUUID: string, targetUUID: string, reason?: string) {
+    return this.request('/ban-member', {
+      method: 'POST',
+      body: JSON.stringify({ groupId, adminUUID, targetUUID, reason }),
+    });
+  }
+
+  async unbanMember(groupId: string, adminUUID: string, targetUUID: string) {
+    return this.request('/unban-member', {
+      method: 'POST',
+      body: JSON.stringify({ groupId, adminUUID, targetUUID }),
+    });
+  }
+
+  async updateMemberRole(groupId: string, adminUUID: string, targetUUID: string, newRole: string) {
+    return this.request('/update-member-role', {
+      method: 'POST',
+      body: JSON.stringify({ groupId, adminUUID, targetUUID, newRole }),
+    });
+  }
+
+  async promoteMember(groupId: string, adminUUID: string, targetUUID: string) {
+    return this.request('/promote-member', {
+      method: 'POST',
+      body: JSON.stringify({ groupId, adminUUID, targetUUID }),
+    });
+  }
+
+  async demoteMember(groupId: string, adminUUID: string, targetUUID: string) {
+    return this.request('/demote-member', {
+      method: 'POST',
+      body: JSON.stringify({ groupId, adminUUID, targetUUID }),
+    });
+  }
+
+  async getGroupInvites(playerUUID: string): Promise<{ invites: GroupInvite[] }> {
+    return this.request<{ invites: GroupInvite[] }>(`/group-invites?playerUUID=${playerUUID}`);
+  }
+
+  async sendGroupInvite(data: {
+    groupId: string;
+    inviterUUID: string;
+    inviterName: string;
+    targetName: string;
+    message?: string;
+  }) {
+    return this.request('/send-group-invite', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async acceptGroupInvite(inviteId: string, playerUUID: string) {
+    return this.request('/accept-group-invite', {
+      method: 'POST',
+      body: JSON.stringify({ inviteId, playerUUID }),
+    });
+  }
+
+  async rejectGroupInvite(inviteId: string, playerUUID: string) {
+    return this.request('/reject-group-invite', {
+      method: 'POST',
+      body: JSON.stringify({ inviteId, playerUUID }),
+    });
+  }
+
+  async cancelGroupInvite(inviteId: string, inviterUUID: string) {
+    return this.request('/cancel-group-invite', {
+      method: 'POST',
+      body: JSON.stringify({ inviteId, inviterUUID }),
+    });
+  }
+
+  async getGroupMessages(groupId: string, limit: number = 50, before?: number): Promise<{ messages: GroupMessage[] }> {
+    let url = `/group-messages?groupId=${groupId}&limit=${limit}`;
+    if (before) {
+      url += `&before=${before}`;
+    }
+
+    const response = await this.request<{ messages: any[] }>(url);
+
+    const messages = response.messages.map(msg => ({
+      messageId: msg.messageId,
+      groupId: msg.groupId,
+      senderUUID: msg.senderUUID,
+      senderName: msg.senderName,
+      content: msg.content,
+      timestamp: msg.timestamp,
+      messageType: msg.messageType || 'TEXT',
+      editedAt: msg.editedAt
+    }));
+
+    return { messages };
+  }
+
+  async sendGroupMessage(groupId: string, senderUUID: string, senderName: string, content: string, messageType: string = 'TEXT') {
+    return this.request('/send-group-message', {
+      method: 'POST',
+      body: JSON.stringify({ groupId, senderUUID, senderName, content, messageType }),
+    });
+  }
+
+  async sendGroupAnnouncement(groupId: string, senderUUID: string, senderName: string, content: string) {
+    return this.sendGroupMessage(groupId, senderUUID, senderName, content, 'ANNOUNCEMENT');
+  }
+
+  async editGroupMessage(messageId: string, senderUUID: string, newContent: string) {
+    return this.request('/edit-group-message', {
+      method: 'POST',
+      body: JSON.stringify({ messageId, senderUUID, newContent }),
+    });
+  }
+
+  async deleteGroupMessage(messageId: string, senderUUID: string, groupId: string) {
+    return this.request('/delete-group-message', {
+      method: 'POST',
+      body: JSON.stringify({ messageId, senderUUID, groupId }),
+    });
+  }
+
+  async getGroupSettings(groupId: string): Promise<{ settings: GroupSettings }> {
+    return this.request<{ settings: GroupSettings }>(`/group-settings?groupId=${groupId}`);
+  }
+
+  async updateGroupSettings(groupId: string, adminUUID: string, settings: Partial<GroupSettings>) {
+    return this.request('/update-group-settings', {
+      method: 'POST',
+      body: JSON.stringify({ groupId, adminUUID, ...settings }),
+    });
+  }
+
+  async muteMember(groupId: string, adminUUID: string, targetUUID: string, duration?: number) {
+    return this.request('/mute-member', {
+      method: 'POST',
+      body: JSON.stringify({ groupId, adminUUID, targetUUID, duration }),
+    });
+  }
+
+  async unmuteMember(groupId: string, adminUUID: string, targetUUID: string) {
+    return this.request('/unmute-member', {
+      method: 'POST',
+      body: JSON.stringify({ groupId, adminUUID, targetUUID }),
+    });
+  }
+
+  async setGroupPrivacy(groupId: string, adminUUID: string, isPrivate: boolean) {
+    return this.request('/set-group-privacy', {
+      method: 'POST',
+      body: JSON.stringify({ groupId, adminUUID, isPrivate }),
+    });
+  }
+
+  async getGroupInviteCode(groupId: string, playerUUID: string): Promise<{ inviteCode: string }> {
+    return this.request<{ inviteCode: string }>(`/group-invite-code?groupId=${groupId}&playerUUID=${playerUUID}`);
+  }
+
+  async regenerateGroupInviteCode(groupId: string, adminUUID: string): Promise<{ inviteCode: string }> {
+    return this.request<{ inviteCode: string }>('/regenerate-invite-code', {
+      method: 'POST',
+      body: JSON.stringify({ groupId, adminUUID }),
+    });
+  }
+
+  async getGroupStats(groupId: string): Promise<{
+    memberCount: number;
+    messageCount: number;
+    createdAt: number;
+    mostActiveMembers: { playerName: string; messageCount: number }[];
+    recentActivity: { date: string; messages: number; joins: number }[];
+  }> {
+    return this.request(`/group-stats?groupId=${groupId}`);
+  }
+
+  async getRecommendedGroups(playerUUID: string): Promise<{ groups: GroupInfo[] }> {
+    return this.request<{ groups: GroupInfo[] }>(`/recommended-groups?playerUUID=${playerUUID}`);
+  }
+
+  async getTrendingGroups(): Promise<{ groups: GroupInfo[] }> {
+    return this.request<{ groups: GroupInfo[] }>('/trending-groups');
+  }
+
+  async getPopularGroups(limit: number = 10): Promise<{ groups: GroupInfo[] }> {
+    return this.request<{ groups: GroupInfo[] }>(`/popular-groups?limit=${limit}`);
   }
 }
 
 export const getPlayerSkin = (username: string, uuid?: string) => {
-  if (uuid) {
+  if (!username && !uuid) {
+    return 'https://crafatar.com/avatars/5e9b103b-dfc2-4b59-be29-eb7523248b5d?size=64&overlay';
+  }
+
+  if (uuid && typeof uuid === 'string' && uuid.length === 36 && uuid.includes('-')) {
     return `https://crafatar.com/avatars/${uuid}?size=64&overlay`;
   }
-  
-  if (username) {
+
+  if (username && typeof username === 'string' && username !== 'undefined') {
     return `https://crafatar.com/avatars/${username}?size=64&overlay`;
   }
-  
+
   return 'https://crafatar.com/avatars/5e9b103b-dfc2-4b59-be29-eb7523248b5d?size=64&overlay';
 };
 
-export const getPlayerHead = (username: string, uuid?: string, size: number = 64) => {
-  if (uuid && uuid.length === 36 && uuid.includes('-')) {
-    return `https://crafatar.com/avatars/${uuid}?size=${size}&overlay`;
+export const getPlayerHead = (uuidOrUsername: string, fallbackUuid?: string, size: number = 64) => {
+  if (!uuidOrUsername && !fallbackUuid) {
+    return `https://crafatar.com/avatars/5e9b103b-dfc2-4b59-be29-eb7523248b5d?size=${size}&overlay`;
   }
-  
-  if (username) {
-    return `https://crafatar.com/avatars/${username}?size=${size}&overlay`;
+
+  if (uuidOrUsername && typeof uuidOrUsername === 'string' && uuidOrUsername.length === 36 && uuidOrUsername.includes('-')) {
+    return `https://crafatar.com/avatars/${uuidOrUsername}?size=${size}&overlay`;
   }
-  
+
+  if (fallbackUuid && typeof fallbackUuid === 'string' && fallbackUuid.length === 36 && fallbackUuid.includes('-')) {
+    return `https://crafatar.com/avatars/${fallbackUuid}?size=${size}&overlay`;
+  }
+
+  if (uuidOrUsername && typeof uuidOrUsername === 'string' && uuidOrUsername !== 'undefined') {
+    return `https://mc-heads.net/avatar/${uuidOrUsername}/${size}`;
+  }
+
   return `https://crafatar.com/avatars/5e9b103b-dfc2-4b59-be29-eb7523248b5d?size=${size}&overlay`;
 };
 
 export const formatMinecraftRank = (formattedRank: string): string => {
   if (!formattedRank) return '';
-  
+
   return formattedRank
-    .replace(/§[0-9a-fk-or]/gi, '') 
+    .replace(/§[0-9a-fk-or]/gi, '')
     .trim();
 };
 
 export const getRankColor = (formattedRank: string): string => {
   if (!formattedRank) return 'text-neutral-400';
-  
+
   const colorMap: { [key: string]: string } = {
     '§0': 'text-neutral-900',
     '§1': 'text-neutral-700',
@@ -381,7 +759,7 @@ export const getRankColor = (formattedRank: string): string => {
     '§9': 'text-neutral-300',
     '§a': 'text-neutral-200',
     '§b': 'text-neutral-300',
-    '§c': 'text-red-400', 
+    '§c': 'text-red-400',
     '§d': 'text-yellow-400',
     '§e': 'text-yellow-300',
     '§f': 'text-white',
@@ -390,7 +768,7 @@ export const getRankColor = (formattedRank: string): string => {
   const colorMatches = formattedRank.match(/§[0-9a-f]/gi);
   if (colorMatches && colorMatches.length > 0) {
     const priorityColors = ['§c', '§6', '§e', '§d', '§a', '§b', '§9', '§5', '§f'];
-    
+
     for (const priority of priorityColors) {
         // this works as it checks if the color code exists in the matches
         // find the first color code that matches the priority
@@ -400,13 +778,13 @@ export const getRankColor = (formattedRank: string): string => {
         return colorMap[found.toLowerCase()];
       }
     }
-    
+
     const firstColor = colorMatches[0].toLowerCase();
     if (colorMap[firstColor]) {
       return colorMap[firstColor];
     }
   }
-  
+
   const lowerRank = formattedRank.toLowerCase();
   if (lowerRank.includes('admin') || lowerRank.includes('owner')) {
     return 'text-red-400';
@@ -415,8 +793,237 @@ export const getRankColor = (formattedRank: string): string => {
   } else if (lowerRank.includes('vip') || lowerRank.includes('mvp')) {
     return 'text-yellow-500';
   }
-  
+
   return 'text-neutral-400';
+};
+
+function getCurrentUser() {
+  if (typeof window === 'undefined') return null;
+  const savedUser = localStorage.getItem('minechat_user');
+  return savedUser ? JSON.parse(savedUser) : null;
+}
+
+export const moderationApi = {
+  kickMember: async (groupId: string, memberUUID: string, reason?: string) => {
+    const currentUser = getCurrentUser();
+    if (!currentUser) throw new Error('User not authenticated');
+    
+    const response = await fetch(`${API_BASE_URL}/kick-member`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        groupId,
+        adminUUID: currentUser.playerUUID,
+        targetUUID: memberUUID,
+        reason: reason || 'No reason provided'
+      }),
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to kick member');
+    }
+    
+    return response.json();
+  },
+
+  banMember: async (groupId: string, memberUUID: string, reason?: string) => {
+    const currentUser = getCurrentUser();
+    if (!currentUser) throw new Error('User not authenticated');
+    
+    const response = await fetch(`${API_BASE_URL}/ban-member`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        groupId,
+        adminUUID: currentUser.playerUUID,
+        targetUUID: memberUUID,
+        reason: reason || 'No reason provided'
+      }),
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to ban member');
+    }
+    
+    return response.json();
+  },
+
+  muteMember: async (groupId: string, memberUUID: string, duration: number) => {
+    const currentUser = getCurrentUser();
+    if (!currentUser) throw new Error('User not authenticated');
+    
+    const response = await fetch(`${API_BASE_URL}/mute-member`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        groupId,
+        adminUUID: currentUser.playerUUID,
+        targetUUID: memberUUID,
+        duration
+      }),
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to mute member');
+    }
+    
+    return response.json();
+  },
+
+  unmuteMember: async (groupId: string, memberUUID: string) => {
+    const currentUser = getCurrentUser();
+    if (!currentUser) throw new Error('User not authenticated');
+    
+    const response = await fetch(`${API_BASE_URL}/unmute-member`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        groupId,
+        adminUUID: currentUser.playerUUID,
+        targetUUID: memberUUID
+      }),
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to unmute member');
+    }
+    
+    return response.json();
+  },
+
+  promoteMember: async (groupId: string, memberUUID: string) => {
+    const currentUser = getCurrentUser();
+    if (!currentUser) throw new Error('User not authenticated');
+    
+    const response = await fetch(`${API_BASE_URL}/promote-member`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        groupId,
+        adminUUID: currentUser.playerUUID,
+        targetUUID: memberUUID
+      }),
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to promote member');
+    }
+    
+    return response.json();
+  },
+
+  demoteMember: async (groupId: string, memberUUID: string) => {
+    const currentUser = getCurrentUser();
+    if (!currentUser) throw new Error('User not authenticated');
+    
+    const response = await fetch(`${API_BASE_URL}/demote-member`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        groupId,
+        adminUUID: currentUser.playerUUID,
+        targetUUID: memberUUID
+      }),
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to demote member');
+    }
+    
+    return response.json();
+  },
+
+  updateGroupMOTD: async (groupId: string, motd: string) => {
+    const response = await fetch(`${API_BASE_URL}/update-group-motd`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        groupId,
+        motd
+      }),
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to update MOTD');
+    }
+    
+    return response.json();
+  },
+
+  addAnnouncement: async (groupId: string, announcement: string, adminUUID: string) => {
+    const response = await fetch(`${API_BASE_URL}/add-announcement`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        groupId,
+        announcement,
+        adminUUID
+      }),
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to add announcement');
+    }
+    
+    return response.json();
+  },
+
+  removeAnnouncement: async (groupId: string, index: number, adminUUID: string) => {
+    const response = await fetch(`${API_BASE_URL}/remove-announcement`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        groupId,
+        index,
+        adminUUID
+      }),
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to remove announcement');
+    }
+    
+    return response.json();
+  },
+
+  updateAnnouncement: async (groupId: string, index: number, announcement: string, adminUUID: string) => {
+    const response = await fetch(`${API_BASE_URL}/update-announcement`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        groupId,
+        index,
+        announcement,
+        adminUUID
+      }),
+    });
+    
+    if (!response.ok) {
+      throw new Error('Failed to update announcement');
+    }
+    
+    return response.json();
+  }
 };
 
 export const api = new MinechatAPI();

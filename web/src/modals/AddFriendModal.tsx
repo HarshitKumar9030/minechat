@@ -110,7 +110,7 @@ const AddFriendModal: React.FC<AddFriendModalProps> = ({ isOpen, onClose, onSubm
     >
       <div className="bg-neutral-800 border border-neutral-700 rounded-xl p-6 w-full max-w-md animate-in zoom-in-95 duration-200">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-minecraftia text-neutral-200 leading-none">
+          <h2 className="text-xl font-minecraftia text-neutral-200">
             Add Friend
           </h2>
           <button
@@ -121,13 +121,13 @@ const AddFriendModal: React.FC<AddFriendModalProps> = ({ isOpen, onClose, onSubm
           </button>
         </div>
         
-        <p className="text-neutral-400 tracking-wide  font-minecraftia text-sm  mt-3 mb-6">
+        <p className="text-neutral-400 font-minecraftia text-sm mb-6">
           Enter a player name to send them a friend request
         </p>
 
         {error && (
           <div className="mb-4 p-3 bg-red-900/30 border border-red-800/50 rounded-lg animate-in slide-in-from-top-2 duration-300">
-            <p className="text-red-400 font-minecraftia text-sm leading-4 mt-3">
+            <p className="text-red-400 font-minecraftia text-sm">
               {error}
             </p>
           </div>
@@ -135,7 +135,7 @@ const AddFriendModal: React.FC<AddFriendModalProps> = ({ isOpen, onClose, onSubm
 
         {success && (
           <div className="mb-4 p-3 bg-green-900/30 border border-green-800/50 rounded-lg animate-in slide-in-from-top-2 duration-300">
-            <p className="text-green-400 font-minecraftia text-sm leading-4 mt-3">
+            <p className="text-green-400 font-minecraftia text-sm">
               {success}
             </p>
           </div>
@@ -143,7 +143,7 @@ const AddFriendModal: React.FC<AddFriendModalProps> = ({ isOpen, onClose, onSubm
         
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="relative">
-            <label className="block mt-2 text-neutral-300 font-minecraftia text-sm mb-2 leading-none">
+            <label className="block text-neutral-300 font-minecraftia text-sm mb-2">
               Player Name
             </label>
             <div className="relative">
@@ -152,13 +152,13 @@ const AddFriendModal: React.FC<AddFriendModalProps> = ({ isOpen, onClose, onSubm
                 placeholder="Start typing to search players..."
                 value={friendName}
                 onChange={(e) => setFriendName(e.target.value)}
-                className="w-full px-4 py-3 pl-10 font-inter bg-neutral-900 border border-neutral-600 rounded-lg text-neutral-200 placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-yellow-600 focus:border-transparent text-sm leading-none mt-3 transition-all duration-300"
+                className="w-full px-4 py-3 pl-10 bg-neutral-900 border border-neutral-600 rounded-lg text-neutral-200 placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-yellow-600 focus:border-transparent text-sm transition-all duration-300"
                 required
                 autoFocus
               />
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-neutral-500 mt-1.5" />
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-neutral-500" />
               {searching && (
-                <div className="absolute right-3 top-1/2 transform -translate-y-1/2 mt-1.5">
+                <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
                   <div className="h-4 w-4 border-2 border-neutral-600 border-t-yellow-600 rounded-full animate-spin" />
                 </div>
               )}
@@ -188,11 +188,11 @@ const AddFriendModal: React.FC<AddFriendModalProps> = ({ isOpen, onClose, onSubm
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        <span className="font-minecraftia pt-1 text-neutral-200 text-xs truncate">
+                        <span className="font-minecraftia text-neutral-200 text-xs truncate">
                           {player.playerName}
                         </span>
                         {player.rank && (
-                          <span className="font-minecraftia pt-1 text-yellow-500 text-xs truncate">
+                          <span className="font-minecraftia text-yellow-500 text-xs truncate">
                             {player.rank}
                           </span>
                         )}

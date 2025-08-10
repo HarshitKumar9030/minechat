@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Send, ChevronDown, Crown, Shield } from 'lucide-react';
 import { GroupInfo, api, GroupMember as ApiGroupMember } from '@/lib/api';
@@ -70,13 +71,7 @@ const GroupChatArea: React.FC<GroupChatAreaProps> = ({
     try {
       const response = await api.getGroupMembers(group.groupId);
       if (response.members) {
-        const membersWithStatus = response.members.map(member => ({
-          ...member,
-          online: false,
-          rank: '',
-          formattedRank: ''
-        }));
-        setMembers(membersWithStatus);
+        setMembers(response.members);
       }
     } catch (error) {
       console.error('Failed to load members:', error);
@@ -87,6 +82,14 @@ const GroupChatArea: React.FC<GroupChatAreaProps> = ({
     if (group) {
       loadMessages();
       loadMembers();
+      
+      const memberRefreshInterval = setInterval(() => {
+        loadMembers();
+      }, 30000);
+      
+      return () => {
+        clearInterval(memberRefreshInterval);
+      };
     }
   }, [group, loadMessages, loadMembers]);
 
@@ -98,16 +101,22 @@ const GroupChatArea: React.FC<GroupChatAreaProps> = ({
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
+  const isSameGroup = (msg: ChatMessage, grp: GroupInfo) => {
+    const candidatesFromMsg = [msg.groupId, (msg as any).groupName].filter(Boolean);
+    const candidatesFromGroup = [grp.groupId, grp.groupName];
+    return candidatesFromMsg.some(v => candidatesFromGroup.includes(v as string));
+  };
+
   useEffect(() => {
     if (!websocket || !group) return;
 
     const handleMessage = (message: ChatMessage) => {
-      if (message.groupId === group.groupId) {
+      if (isSameGroup(message, group)) {
         const newMsg: GroupMessage = {
           messageId: message.messageId || `${Date.now()}-${Math.random()}`,
           senderId: message.senderUUID || '',
           senderName: message.senderName || 'Unknown',
-          message: message.content || '',
+          message: (message as any).message || message.content || '',
           timestamp: message.timestamp || Date.now(),
           source: message.source || 'web'
         };
@@ -115,10 +124,10 @@ const GroupChatArea: React.FC<GroupChatAreaProps> = ({
       }
     };
 
-    websocket.onMessage(handleMessage);
+    const unsubscribe = websocket.onMessage(handleMessage);
 
     return () => {
-      
+      unsubscribe?.();
     };
   }, [websocket, group]);
 
@@ -184,7 +193,7 @@ const GroupChatArea: React.FC<GroupChatAreaProps> = ({
   const offlineMembers = members.filter(m => !m.online);
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full min-h-0">
       {/* Header */}
       <div className="bg-neutral-800 border border-neutral-700 rounded-t-lg p-4 flex items-center justify-between">
         <div>
@@ -205,10 +214,10 @@ const GroupChatArea: React.FC<GroupChatAreaProps> = ({
       </div>
 
       <div className="flex flex-1 min-h-0">
-        <div className="flex-1 flex flex-col">
+  <div className="flex-1 flex flex-col min-h-0">
           <div 
             ref={chatContainerRef}
-            className="flex-1 bg-neutral-900 border-x border-neutral-700 p-4 overflow-y-auto"
+            className="flex-1 bg-neutral-900 border-x border-neutral-700 p-4 overflow-y-auto min-h-0"
           >
             {loading ? (
               <div className="flex items-center justify-center h-full">
@@ -288,7 +297,7 @@ const GroupChatArea: React.FC<GroupChatAreaProps> = ({
                   <button
                     onClick={handleSendMessage}
                     disabled={!newMessage.trim() || !isConnected}
-                    className="px-4 py-3 bg-yellow-600 hover:bg-yellow-700 disabled:bg-neutral-600 disabled:cursor-not-allowed text-neutral-900 disabled:text-neutral-400 rounded-lg transition-colors flex items-center gap-2"
+                    className="px-4 py-4 bg-yellow-600 hover:bg-yellow-700 mb-2 disabled:bg-neutral-600 disabled:cursor-not-allowed text-neutral-900 disabled:text-neutral-400 rounded-lg transition-colors flex items-center gap-2"
                   >
                     <Send className="w-4 h-4" />
                   </button>
@@ -298,7 +307,6 @@ const GroupChatArea: React.FC<GroupChatAreaProps> = ({
           </div>
         </div>
 
-        {/* Members Sidebar */}
         {showMembers && (
           <div className="w-64 bg-neutral-800 border-r border-b border-neutral-700 rounded-br-lg">
             <div className="p-4">
@@ -307,7 +315,6 @@ const GroupChatArea: React.FC<GroupChatAreaProps> = ({
               </h3>
               
               <div className="space-y-3 max-h-96 overflow-y-auto">
-                {/* Online Members */}
                 {onlineMembers.length > 0 && (
                   <div>
                     <h4 className="text-xs text-neutral-400 uppercase tracking-wide mb-2">
@@ -332,7 +339,6 @@ const GroupChatArea: React.FC<GroupChatAreaProps> = ({
                   </div>
                 )}
 
-                {/* Offline Members */}
                 {offlineMembers.length > 0 && (
                   <div>
                     <h4 className="text-xs text-neutral-400 uppercase tracking-wide mb-2">

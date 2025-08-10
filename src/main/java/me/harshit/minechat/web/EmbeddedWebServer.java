@@ -70,7 +70,7 @@ public class EmbeddedWebServer {
             server.createContext("/api/friend-requests/incoming", new IncomingFriendRequestsHandler());
             server.createContext("/api/friend-requests/outgoing", new OutgoingFriendRequestsHandler());
             server.createContext("/api/friend-stats", new FriendStatsHandler());
-
+      
             server.createContext("/api/groups", new GroupsHandler());
             server.createContext("/api/create-group", new CreateGroupHandler());
             server.createContext("/api/delete-group", new DeleteGroupHandler());
@@ -84,6 +84,7 @@ public class EmbeddedWebServer {
             server.createContext("/api/accept-group-invite", new AcceptGroupInviteHandler(plugin));
             server.createContext("/api/reject-group-invite", new RejectGroupInviteHandler(plugin));
             server.createContext("/api/add-announcement", new AddAnnouncementHandler(plugin));
+            server.createContext("/api/group-details", new GroupDetailsHandler());
             
             KickMemberHandler moderationHandler = new KickMemberHandler(plugin);
             server.createContext("/api/kick-member", moderationHandler);
@@ -101,6 +102,7 @@ public class EmbeddedWebServer {
             server.createContext("/api/recommended-groups", new GroupsHandler());
 
             server.createContext("/api/messages", new MessagesHandler());
+            server.createContext("/api/private-messages", new PrivateMessagesHandler());
             server.createContext("/api/send-message", new SendMessageHandler());
             server.createContext("/api/group-messages", new GroupMessagesHandler());
             server.createContext("/api/send-group-message", new SendGroupMessageHandler());
@@ -378,6 +380,93 @@ public class EmbeddedWebServer {
         }
     }
 
+    private class GroupDetailsHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            new CORSHandler().handle(exchange);
+
+            if ("GET".equals(exchange.getRequestMethod())) {
+                try {
+                    String query = exchange.getRequestURI().getQuery();
+                    String groupId = getQueryParam(query, "groupId");
+                    String playerUUID = getQueryParam(query, "playerUUID");
+
+                    if (groupId == null) {
+                        sendErrorResponse(exchange, "Group ID required", 400);
+                        return;
+                    }
+
+                    UUID groupUUID = UUID.fromString(groupId);
+                    Document groupDoc = groupManager.getGroup(groupUUID);
+                    if (groupDoc == null) {
+                        sendErrorResponse(exchange, "Group not found", 404);
+                        return;
+                    }
+
+                    Map<String, Object> group = new HashMap<>();
+                    group.put("groupId", groupId);
+                    group.put("groupName", groupDoc.getString("groupName"));
+                    group.put("description", groupDoc.getString("description"));
+                    group.put("maxMembers", groupDoc.getInteger("maxMembers", 20));
+                    group.put("isPrivate", groupDoc.getBoolean("isPrivate", false));
+
+                    if (groupDoc.containsKey("createdAt")) {
+                        try {
+                            Object createdAt = groupDoc.get("createdAt");
+                            if (createdAt instanceof Number) {
+                                group.put("createdAt", ((Number) createdAt).longValue());
+                            }
+                        } catch (Exception ignored) {}
+                    }
+
+                    List<Document> members = groupDoc.getList("members", Document.class);
+                    int memberCount = members != null ? members.size() : 0;
+                    group.put("memberCount", memberCount);
+
+                    if (playerUUID != null && members != null) {
+                        String role = members.stream()
+                                .filter(m -> playerUUID.equals(m.getString("playerId")))
+                                .map(m -> m.getString("role"))
+                                .findFirst()
+                                .orElse(null);
+                        if (role != null) {
+                            group.put("role", role);
+                        }
+                    }
+
+                    if (groupDoc.containsKey("ownerId")) {
+                        group.put("ownerId", groupDoc.getString("ownerId"));
+                    }
+                    if (groupDoc.containsKey("ownerName")) {
+                        group.put("ownerName", groupDoc.getString("ownerName"));
+                    }
+
+                    Document settings = groupDoc.get("settings", Document.class);
+                    if (settings != null) {
+                        String motd = settings.getString("groupMotd");
+                        if (motd != null && !motd.isEmpty()) {
+                            group.put("motd", motd);
+                        }
+
+                        List<String> announcements = settings.getList("announcements", String.class);
+                        if (announcements != null && !announcements.isEmpty()) {
+                            group.put("announcements", announcements);
+                        }
+                    }
+
+                    Map<String, Object> response = Map.of("group", group);
+                    sendJsonResponse(exchange, response, 200);
+                } catch (IllegalArgumentException e) {
+                    sendErrorResponse(exchange, "Invalid UUID format", 400);
+                } catch (Exception e) {
+                    sendErrorResponse(exchange, "Internal server error", 500);
+                }
+            } else {
+                sendErrorResponse(exchange, "Method not allowed", 405);
+            }
+        }
+    }
+
     private class MessagesHandler implements HttpHandler {
         @Override
         public void handle(HttpExchange exchange) throws IOException {
@@ -396,6 +485,42 @@ public class EmbeddedWebServer {
 
                     int messageLimit = limit != null ? Integer.parseInt(limit) : 50;
                     List<Document> messages = groupManager.getGroupMessages(UUID.fromString(groupId), messageLimit);
+
+                    Map<String, Object> response = Map.of("messages", messages);
+                    sendJsonResponse(exchange, response, 200);
+
+                } catch (Exception e) {
+                    sendErrorResponse(exchange, "Internal server error", 500);
+                }
+            } else {
+                sendErrorResponse(exchange, "Method not allowed", 405);
+            }
+        }
+    }
+
+    private class PrivateMessagesHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            new CORSHandler().handle(exchange);
+
+            if ("GET".equals(exchange.getRequestMethod())) {
+                try {
+                    String query = exchange.getRequestURI().getQuery();
+                    String player1 = getQueryParam(query, "player1");
+                    String player2 = getQueryParam(query, "player2");
+                    String limitParam = getQueryParam(query, "limit");
+
+                    if (player1 == null || player2 == null) {
+                        sendErrorResponse(exchange, "player1 and player2 are required", 400);
+                        return;
+                    }
+
+                    int limit = 100;
+                    if (limitParam != null) {
+                        try { limit = Integer.parseInt(limitParam); } catch (NumberFormatException ignored) {}
+                    }
+
+                    List<Document> messages = databaseManager.getPrivateMessages(player1, player2, limit);
 
                     Map<String, Object> response = Map.of("messages", messages);
                     sendJsonResponse(exchange, response, 200);
@@ -449,6 +574,226 @@ public class EmbeddedWebServer {
                     });
 
                     Map<String, Object> response = Map.of("success", true);
+                    sendJsonResponse(exchange, response, 200);
+
+                } catch (Exception e) {
+                    sendErrorResponse(exchange, "Internal server error", 500);
+                }
+            } else {
+                sendErrorResponse(exchange, "Method not allowed", 405);
+            }
+        }
+    }
+
+    private class SendFriendMessageHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            new CORSHandler().handle(exchange);
+
+            if ("POST".equals(exchange.getRequestMethod())) {
+                try {
+                    String requestBody = readRequestBody(exchange);
+                    JsonObject json = gson.fromJson(requestBody, JsonObject.class);
+
+                    String senderUUIDStr = json.has("senderUUID") && !json.get("senderUUID").isJsonNull() ? json.get("senderUUID").getAsString() : null;
+                    String senderName = json.has("senderName") && !json.get("senderName").isJsonNull() ? json.get("senderName").getAsString() : null;
+                    String targetUUIDStr = json.has("targetUUID") && !json.get("targetUUID").isJsonNull() ? json.get("targetUUID").getAsString() : null;
+                    String targetName = json.has("targetName") && !json.get("targetName").isJsonNull() ? json.get("targetName").getAsString() : null;
+                    String message = json.has("message") && !json.get("message").isJsonNull() ? json.get("message").getAsString() : null;
+
+                    if (message == null || message.trim().isEmpty()) {
+                        sendErrorResponse(exchange, "Message content required", 400);
+                        return;
+                    }
+
+                    UUID senderUUID = null;
+                    if (senderUUIDStr != null) {
+                        try { senderUUID = UUID.fromString(senderUUIDStr); } catch (Exception ignored) {}
+                    }
+                    if (senderUUID == null && senderName != null) {
+                        senderUUID = getPlayerUUID(senderName);
+                    }
+                    if (senderName == null && senderUUID != null) {
+                        senderName = getPlayerNameByUUID(senderUUID);
+                    }
+
+                    UUID targetUUID = null;
+                    if (targetUUIDStr != null) {
+                        try { targetUUID = UUID.fromString(targetUUIDStr); } catch (Exception ignored) {}
+                    }
+                    if (targetUUID == null && targetName != null) {
+                        targetUUID = getPlayerUUID(targetName);
+                    }
+                    if (targetName == null && targetUUID != null) {
+                        targetName = getPlayerNameByUUID(targetUUID);
+                    }
+
+                    if (senderUUID == null || targetUUID == null || senderName == null || targetName == null) {
+                        sendErrorResponse(exchange, "Invalid sender/target identifiers", 400);
+                        return;
+                    }
+
+                    if (senderUUID.equals(targetUUID)) {
+                        sendErrorResponse(exchange, "Cannot message yourself", 400);
+                        return;
+                    }
+
+                    boolean areFriends = friendManager.areFriends(senderUUID, targetUUID);
+                    if (!areFriends) {
+                        sendErrorResponse(exchange, "You're not friends with this player", 403);
+                        return;
+                    }
+
+                    Player target = Bukkit.getPlayerExact(targetName);
+                    // Allow messaging to offline players, just store in database and notify web sessions
+
+                    final String finalSenderName = senderName;
+                    final String finalMessage = message;
+                    final UUID finalSenderUUID = senderUUID;
+                    final String finalTargetName = targetName;
+                    final UUID finalTargetUUID = targetUUID;
+                    final Player finalTarget = target;
+                    Bukkit.getScheduler().runTask(plugin, () -> {
+                        // Send to Minecraft if player is online
+                        if (finalTarget != null && finalTarget.isOnline()) {
+                            String format = plugin.getConfig().getString("private-messages.format",
+                                "&7[&dPM&7] &e{sender} &7→ &e{receiver}&7: &f{message}");
+
+                            String formattedMessage = format
+                                .replace("{sender}", finalSenderName + " (Web)")
+                                .replace("{receiver}", finalTarget.getName())
+                                .replace("{message}", finalMessage);
+
+                            finalTarget.sendMessage(formattedMessage.replace("&", "§"));
+                        }
+
+                        if (plugin.getDatabaseManager() != null) {
+                            plugin.getDatabaseManager().storePrivateMessage(
+                                finalSenderName, finalSenderUUID, 
+                                finalTargetName, finalTargetUUID, 
+                                finalMessage, "web"
+                            );
+                        }
+
+                        if (plugin.getWebAPIHandler() != null) {
+                            plugin.getWebAPIHandler().broadcastMinecraftMessage(finalSenderUUID, finalSenderName, finalMessage,
+                                "friend_message", finalTargetUUID);
+                        }
+                    });
+
+                    Map<String, Object> response = Map.of(
+                        "success", true,
+                        "targetName", targetName,
+                        "timestamp", System.currentTimeMillis(),
+                        "delivered", target != null && target.isOnline()
+                    );
+                    sendJsonResponse(exchange, response, 200);
+
+                } catch (Exception e) {
+                    sendErrorResponse(exchange, "Internal server error", 500);
+                }
+            } else {
+                sendErrorResponse(exchange, "Method not allowed", 405);
+            }
+        }
+    }
+
+    private class SendDirectMessageHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            new CORSHandler().handle(exchange);
+
+            if ("POST".equals(exchange.getRequestMethod())) {
+                try {
+                    String requestBody = readRequestBody(exchange);
+                    JsonObject json = gson.fromJson(requestBody, JsonObject.class);
+
+                    String senderUUIDStr = json.has("senderUUID") && !json.get("senderUUID").isJsonNull() ? json.get("senderUUID").getAsString() : null;
+                    String senderName = json.has("senderName") && !json.get("senderName").isJsonNull() ? json.get("senderName").getAsString() : null;
+                    String targetUUIDStr = json.has("targetUUID") && !json.get("targetUUID").isJsonNull() ? json.get("targetUUID").getAsString() : null;
+                    String targetName = json.has("targetName") && !json.get("targetName").isJsonNull() ? json.get("targetName").getAsString() : null;
+                    String message = json.has("message") && !json.get("message").isJsonNull() ? json.get("message").getAsString() : null;
+
+                    if (message == null || message.trim().isEmpty()) {
+                        sendErrorResponse(exchange, "Message content required", 400);
+                        return;
+                    }
+
+                    UUID senderUUID = null;
+                    if (senderUUIDStr != null) {
+                        try { senderUUID = UUID.fromString(senderUUIDStr); } catch (Exception ignored) {}
+                    }
+                    if (senderUUID == null && senderName != null) {
+                        senderUUID = getPlayerUUID(senderName);
+                    }
+                    if (senderName == null && senderUUID != null) {
+                        senderName = getPlayerNameByUUID(senderUUID);
+                    }
+
+                    UUID targetUUID = null;
+                    if (targetUUIDStr != null) {
+                        try { targetUUID = UUID.fromString(targetUUIDStr); } catch (Exception ignored) {}
+                    }
+                    if (targetUUID == null && targetName != null) {
+                        targetUUID = getPlayerUUID(targetName);
+                    }
+                    if (targetName == null && targetUUID != null) {
+                        targetName = getPlayerNameByUUID(targetUUID);
+                    }
+
+                    if (senderUUID == null || targetUUID == null || senderName == null || targetName == null) {
+                        sendErrorResponse(exchange, "Invalid sender/target identifiers", 400);
+                        return;
+                    }
+
+                    if (senderUUID.equals(targetUUID)) {
+                        sendErrorResponse(exchange, "Cannot message yourself", 400);
+                        return;
+                    }
+
+                    Player target = Bukkit.getPlayerExact(targetName);
+                    // Allow messaging to offline players, just store in database and notify web sessions
+
+                    final String finalSenderName = senderName;
+                    final String finalMessage = message;
+                    final UUID finalSenderUUID = senderUUID;
+                    final String finalTargetName = targetName;
+                    final UUID finalTargetUUID = targetUUID;
+                    final Player finalTarget = target;
+                    Bukkit.getScheduler().runTask(plugin, () -> {
+                        // Send to Minecraft if player is online
+                        if (finalTarget != null && finalTarget.isOnline()) {
+                            String format = plugin.getConfig().getString("private-messages.format",
+                                "&7[&dPM&7] &e{sender} &7→ &e{receiver}&7: &f{message}");
+
+                            String formattedMessage = format
+                                .replace("{sender}", finalSenderName + " (Web)")
+                                .replace("{receiver}", finalTarget.getName())
+                                .replace("{message}", finalMessage);
+
+                            finalTarget.sendMessage(formattedMessage.replace("&", "§"));
+                        }
+
+                        if (plugin.getDatabaseManager() != null) {
+                            plugin.getDatabaseManager().storePrivateMessage(
+                                finalSenderName, finalSenderUUID, 
+                                finalTargetName, finalTargetUUID, 
+                                finalMessage, "web"
+                            );
+                        }
+
+                        if (plugin.getWebAPIHandler() != null) {
+                            plugin.getWebAPIHandler().broadcastMinecraftMessage(finalSenderUUID, finalSenderName, finalMessage,
+                                "friend_message", finalTargetUUID);
+                        }
+                    });
+
+                    Map<String, Object> response = Map.of(
+                        "success", true,
+                        "targetName", targetName,
+                        "timestamp", System.currentTimeMillis(),
+                        "delivered", target != null && target.isOnline()
+                    );
                     sendJsonResponse(exchange, response, 200);
 
                 } catch (Exception e) {

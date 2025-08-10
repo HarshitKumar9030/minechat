@@ -45,6 +45,9 @@ const GroupModeration: React.FC<GroupModerationProps> = ({
 
   const canModerate = userRole === 'OWNER' || userRole === 'ADMIN';
   const isOwner = userRole === 'OWNER';
+  const moderateCandidates = members.filter(
+    m => m.playerUUID !== currentUser?.playerUUID && m.role !== 'OWNER'
+  );
 
   const getMemberActions = (member: GroupMember): ActionItem[] => {
     const actions: ActionItem[] = [];
@@ -198,14 +201,12 @@ const GroupModeration: React.FC<GroupModerationProps> = ({
         </div>
 
         <div className="space-y-4">
-          <div className="flex items-center justify-between p-3 bg-neutral-700 rounded-lg">
+          <div className="flex items-center justify-between p-3 bg-neutral-700 rounded-lg sticky top-0 z-10">
             <div className="flex items-center gap-3">
               <Users className="w-5 h-5 text-neutral-400" />
               <div>
                 <p className="text-neutral-200 font-medium">Members to Moderate</p>
-                <p className="text-sm text-neutral-400">
-                  {members.filter(m => m.playerUUID !== currentUser?.playerUUID && m.role !== 'OWNER').length} members available
-                </p>
+                <p className="text-sm text-neutral-400">{moderateCandidates.length} members available</p>
               </div>
             </div>
             <div className="text-sm text-neutral-500">
@@ -214,9 +215,7 @@ const GroupModeration: React.FC<GroupModerationProps> = ({
           </div>
 
           <div className="grid gap-3">
-            {members
-              .filter(member => member.playerUUID !== currentUser?.playerUUID && member.role !== 'OWNER')
-              .map((member) => {
+            {moderateCandidates.map((member) => {
                 const actions = getMemberActions(member);
                 return (
                   <div
@@ -226,7 +225,7 @@ const GroupModeration: React.FC<GroupModerationProps> = ({
                     <div className="flex items-center gap-3">
                       <div className="relative">
                         <Image
-                          src={getPlayerHead(member.playerName, member.playerUUID)}
+                          src={getPlayerHead(member.playerUUID)}
                           alt={member.playerName}
                           width={32}
                           height={32}
@@ -253,7 +252,7 @@ const GroupModeration: React.FC<GroupModerationProps> = ({
                     <div className="flex gap-1">
                       {actions.map((action) => (
                         <button
-                          key={action.id}
+                          key={`${member.playerUUID}-${action.id}`}
                           onClick={() => handleActionClick(action.id, member)}
                           className={`p-2 ${action.color} transition-colors rounded`}
                           title={action.description}
@@ -266,7 +265,7 @@ const GroupModeration: React.FC<GroupModerationProps> = ({
                 );
               })}
 
-            {members.filter(m => m.playerUUID !== currentUser?.playerUUID && m.role !== 'OWNER').length === 0 && (
+            {moderateCandidates.length === 0 && (
               <div className="text-center py-8">
                 <Settings className="w-12 h-12 text-neutral-600 mx-auto mb-3" />
                 <p className="text-neutral-400">No members to moderate</p>

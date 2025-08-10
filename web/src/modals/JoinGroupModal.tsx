@@ -213,7 +213,7 @@ const JoinGroupModal: React.FC<JoinGroupModalProps> = ({
           ) : (
             <div className="space-y-4">
               <div>
-                <label className="block pt-2.5 text-neutral-300 font-minecraftia text-sm mb-2 leading-none">
+                <label className="block text-neutral-300 font-minecraftia text-sm mb-2 leading-none">
                   Group Invite Code
                 </label>
                 <input

@@ -1,6 +1,6 @@
 'use client';
 import React, { useState, useEffect } from 'react';
-import { User, Settings, LayoutDashboard, LogIn, Menu, X, Users } from 'lucide-react';
+import { User, Settings, LayoutDashboard, LogIn, Menu, X, Users, HomeIcon } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import LoginModal from '../modals/LoginModal';
@@ -96,8 +96,8 @@ const NavBar = () => {
                                     className="flex items-center gap-2 px-3 sm:px-4 py-2 rounded-lg bg-neutral-800 hover:bg-neutral-700 transition-colors text-neutral-200 font-minecraftia text-xs sm:text-sm"
                                     title="Profile"
                                 >
-                                    <User size={14} className="text-yellow-500 sm:w-4 sm:h-4" />
-                                    <span className='!mt-2 sm:!mt-2.5 truncate'>{user?.username || 'Profile'}</span>
+                                    <HomeIcon size={14} className="text-yellow-500 pt-1 sm:w-4 sm:h-4" />
+                                    <span className='!mt-2 pt-1 sm:!mt-2.5 truncate'>Home</span>
                                 </button>
                                 <Link
                                     href="/dashboard"
@@ -106,6 +106,14 @@ const NavBar = () => {
                                 >
                                     <LayoutDashboard size={14} className="text-yellow-500 sm:w-4 sm:h-4" />
                                     <span className='!mt-2 sm:!mt-2.5'>Dashboard</span>
+                                </Link>
+                                <Link
+                                    href="/messages"
+                                    className="flex items-center gap-2 px-3 sm:px-4 py-2 rounded-lg bg-neutral-800 hover:bg-neutral-700 transition-colors text-neutral-200 font-minecraftia text-xs sm:text-sm"
+                                    title="Messages"
+                                >
+                                    <User size={14} className="text-yellow-500 sm:w-4 sm:h-4" />
+                                    <span className='!mt-2 sm:!mt-2.5'>Messages</span>
                                 </Link>
                                 <Link
                                     href="/friends"

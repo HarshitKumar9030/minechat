@@ -50,7 +50,7 @@ const DiscoverGroups: React.FC<DiscoverGroupsProps> = ({
 
     try {
       setJoiningGroupId(group.groupId);
-      const response = await api.joinGroup(user.playerUUID, user.playerName, group.groupName);
+      const response = await api.joinGroup(user.playerUUID, user.playerName, group.groupId);
       
       if (response && typeof response === 'object' && 'success' in response && response.success) {
         setGroups(prev => prev.map(g => 
@@ -76,7 +76,6 @@ const DiscoverGroups: React.FC<DiscoverGroupsProps> = ({
         return;
       }
       
-      // just assume here a 500 means that user is part of the group
       const errorMessage = error instanceof Error ? error.message : String(error);
       if (errorMessage.includes('Internal server error')) {
         if (onAlreadyMember) {
@@ -92,7 +91,7 @@ const DiscoverGroups: React.FC<DiscoverGroupsProps> = ({
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-neutral-100 font-minecraftia">
+          <h2 className="text-2xl font-bold pt-2 text-neutral-100 font-minecraftia">
             Discover Groups
           </h2>
           <p className="text-neutral-400 mt-1">

@@ -121,11 +121,11 @@ const GroupSettingsModal: React.FC<GroupSettingsModalProps> = ({
       className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 animate-in fade-in duration-200"
       onClick={handleBackdropClick}
     >
-      <div className="bg-neutral-800 border border-neutral-700 rounded-xl p-4 sm:p-6 w-full max-w-sm sm:max-w-md lg:max-w-lg animate-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between mb-4 sm:mb-6">
+      <div className="bg-neutral-800 border border-neutral-700 rounded-xl p-6 w-full max-w-md animate-in zoom-in-95 duration-200">
+        <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
             <Settings className="h-5 w-5 text-neutral-400" />
-            <h2 className="text-lg sm:text-xl font-minecraftia text-neutral-200 leading-none mt-2">
+            <h2 className="text-xl font-minecraftia text-neutral-200 leading-none mt-2">
               Group Settings
             </h2>
           </div>
@@ -148,7 +148,7 @@ const GroupSettingsModal: React.FC<GroupSettingsModalProps> = ({
             </p>
           </div>
         ) : (
-          <form onSubmit={handleSubmit} className="space-y-3 sm:space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-4">
             {/* Group Name */}
             <div>
               <label className="block text-neutral-300 font-minecraftia text-sm mb-2 leading-none">
@@ -159,7 +159,7 @@ const GroupSettingsModal: React.FC<GroupSettingsModalProps> = ({
                 value={formData.groupName}
                 onChange={(e) => setFormData(prev => ({ ...prev, groupName: e.target.value }))}
                 placeholder="Enter group name..."
-                className={`w-full px-3 sm:px-4 py-2 sm:py-3 bg-neutral-700 border rounded-lg text-neutral-200 placeholder-neutral-400 font-inter focus:outline-none transition-all duration-300 ${
+                className={`w-full px-4 py-3 bg-neutral-700 border rounded-lg text-neutral-200 placeholder-neutral-400 font-inter focus:outline-none transition-all duration-300 ${
                   errors.groupName ? 'border-red-500 focus:border-red-400' : 'border-neutral-600 focus:border-yellow-600'
                 }`}
                 maxLength={32}
@@ -179,7 +179,7 @@ const GroupSettingsModal: React.FC<GroupSettingsModalProps> = ({
                 onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
                 placeholder="Describe your group..."
                 rows={3}
-                className={`w-full px-3 sm:px-4 py-2 sm:py-3 bg-neutral-700 border rounded-lg text-neutral-200 placeholder-neutral-400 font-inter focus:outline-none transition-all duration-300 resize-none ${
+                className={`w-full px-4 py-3 bg-neutral-700 border rounded-lg text-neutral-200 placeholder-neutral-400 font-inter focus:outline-none transition-all duration-300 resize-none ${
                   errors.description ? 'border-red-500 focus:border-red-400' : 'border-neutral-600 focus:border-yellow-600'
                 }`}
                 maxLength={256}
@@ -196,6 +196,7 @@ const GroupSettingsModal: React.FC<GroupSettingsModalProps> = ({
               </div>
             </div>
 
+            {/* Max Members */}
             <div>
               <label className="block text-neutral-300 font-minecraftia text-sm mb-2 leading-none">
                 Maximum Members
@@ -221,6 +222,7 @@ const GroupSettingsModal: React.FC<GroupSettingsModalProps> = ({
               </p>
             </div>
 
+            {/* Privacy Setting */}
             <div>
               <label className="flex items-center gap-3 p-3 bg-neutral-700 border border-neutral-600 rounded-lg hover:border-neutral-500 transition-all duration-300 cursor-pointer">
                 <input
@@ -262,18 +264,19 @@ const GroupSettingsModal: React.FC<GroupSettingsModalProps> = ({
               </label>
             </div>
 
-            <div className="flex flex-col sm:flex-row gap-3 pt-4">
+            {/* Action Buttons */}
+            <div className="flex gap-3 pt-4">
               <button
                 type="button"
                 onClick={onClose}
-                className="flex-1 px-3 sm:px-4 py-2 sm:py-3 bg-neutral-700 border border-neutral-600 rounded-lg text-neutral-300 hover:bg-neutral-600 transition-all duration-300 font-inter text-sm sm:text-base"
+                className="flex-1 px-4 py-3 bg-neutral-700 border border-neutral-600 rounded-lg text-neutral-300 hover:bg-neutral-600 transition-all duration-300 font-inter"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={loading}
-                className="flex-1 px-3 sm:px-4 py-2 sm:py-3 bg-yellow-600 hover:bg-yellow-700 rounded-lg text-neutral-900 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed font-inter flex items-center justify-center gap-2 text-sm sm:text-base"
+                className="flex-1 px-4 py-3 bg-yellow-600 hover:bg-yellow-700 rounded-lg text-neutral-900 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed font-inter flex items-center justify-center gap-2"
               >
                 {loading ? (
                   <>
@@ -289,6 +292,7 @@ const GroupSettingsModal: React.FC<GroupSettingsModalProps> = ({
               </button>
             </div>
 
+            {/* Delete Group Section */}
             <div className="pt-4 border-t border-neutral-700">
               <div className="bg-red-900/10 border border-red-800/30 rounded-lg p-4">
                 <h3 className="font-minecraftia text-red-400 text-sm mb-2 leading-none">

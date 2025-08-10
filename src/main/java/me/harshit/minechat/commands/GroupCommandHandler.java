@@ -22,6 +22,7 @@ import org.bukkit.entity.Player;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -516,7 +517,21 @@ public class GroupCommandHandler implements CommandExecutor, TabCompleter {
 
             UUID groupId = UUID.fromString(group.getString("groupId"));
 
+            Map<String, Object> messageData = Map.of(
+                "messageId", UUID.randomUUID().toString(),
+                "groupId", groupId.toString(),
+                "senderUUID", player.getUniqueId().toString(),
+                "senderName", player.getName(),
+                "content", message,
+                "timestamp", System.currentTimeMillis(),
+                "messageType", "TEXT",
+                "rank", rankManager.getPlayerRank(player),
+                "formattedRank", rankManager.getFormattedRank(player)
+            );
 
+            if (plugin.getWebAPIHandler() != null) {
+                plugin.getWebAPIHandler().broadcastGroupMessage(groupId, messageData);
+            }
 
             String format = plugin.getConfig().getString("chat-groups.format",
                     "&7[&aGroup: &b{group}&7] &f{player}&7: &f{message}");

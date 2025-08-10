@@ -1,9 +1,10 @@
 import React from 'react';
 import Image from 'next/image';
-import { Hash, Settings, LogOut, Crown, Shield, MessageSquare, Megaphone, Users as UsersIcon } from 'lucide-react';
+import { Hash, Settings, LogOut, Crown, Shield, MessageSquare, Copy } from 'lucide-react';
 import { GroupInfo, GroupMember } from '@/lib/api';
 import { getPlayerHead } from '@/lib/api';
 import RankBadge from './RankBadge';
+import GroupAnnouncements from './GroupAnnouncements';
 
 interface GroupDetailsAreaProps {
   selectedGroup: GroupInfo;
@@ -19,6 +20,7 @@ interface GroupDetailsAreaProps {
   } | null;
   onSettingsClick: () => void;
   onLeaveGroup: (groupId: string) => void;
+  currentUser?: { playerUUID: string; playerName: string } | null;
 }
 
 const GroupDetailsArea: React.FC<GroupDetailsAreaProps> = ({
@@ -28,8 +30,49 @@ const GroupDetailsArea: React.FC<GroupDetailsAreaProps> = ({
   actionLoading,
   groupStats,
   onSettingsClick,
-  onLeaveGroup
+  onLeaveGroup,
+  currentUser
 }) => {
+  const [motdExpanded, setMotdExpanded] = React.useState(false);
+  const motdText = (selectedGroup.motd || '').toString();
+
+  const linkify = (text: string) => {
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    const parts = text.split(urlRegex);
+    return parts.map((part, i) => {
+      if (urlRegex.test(part)) {
+        return (
+          <a
+            key={`url-${i}`}
+            href={part}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-yellow-400 hover:underline break-all"
+          >
+            {part}
+          </a>
+        );
+      }
+      return <span key={`txt-${i}`}>{part}</span>;
+    });
+  };
+
+  const getMotdPreview = () => {
+    const lines = motdText.split(/\r?\n/);
+    const tooManyLines = lines.length > 5;
+    const tooLong = motdText.length > 240;
+    if (!tooManyLines && !tooLong) return motdText;
+    if (tooManyLines) return lines.slice(0, 5).join('\n');
+    return motdText.slice(0, 240) + '…';
+  };
+
+  const copyMotd = async () => {
+    try {
+      await navigator.clipboard.writeText(motdText);
+    } catch (e) {
+      console.error('Failed to copy MOTD:', e);
+    }
+  };
   const getDaysOld = (timestamp: number) => {
     if (!timestamp || isNaN(timestamp)) return 0;
     return Math.floor((Date.now() - timestamp) / (1000 * 60 * 60 * 24));
@@ -70,7 +113,7 @@ const GroupDetailsArea: React.FC<GroupDetailsAreaProps> = ({
         </div>
       </div>
 
-      <div className="space-y-6">
+  <div className="space-y-6 max-h-[calc(100vh-260px)] overflow-y-auto pr-1">
         {groupStats && (
           <div className="grid grid-cols-2 gap-4">
             <div className="bg-neutral-700 rounded-lg p-4 text-center">
@@ -86,52 +129,47 @@ const GroupDetailsArea: React.FC<GroupDetailsAreaProps> = ({
           </div>
         )}
 
-        {/* Show helpful info when stats are empty or missing */}
-        {(!groupStats || (groupStats.memberCount === 0 && groupStats.messageCount === 0)) && (
-          <div className="space-y-4">
-            {/* MOTD Section */}
-            {selectedGroup.motd && (
-              <div className="bg-gradient-to-r from-yellow-600/20 to-orange-600/20 border border-yellow-600/30 rounded-lg p-4">
-                <div className="flex items-center gap-2 mb-2">
+        <div className="space-y-4">
+          {motdText && (
+            <div className="bg-gradient-to-r from-yellow-600/20 to-orange-600/20 border border-yellow-600/30 rounded-lg p-4">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
                   <MessageSquare className="w-5 h-5 text-yellow-500" />
                   <h3 className="font-minecraftia text-yellow-500 text-sm">Message of the Day</h3>
                 </div>
-                <p className="text-neutral-200 text-sm leading-relaxed">{selectedGroup.motd}</p>
-              </div>
-            )}
-
-            {selectedGroup.announcements && selectedGroup.announcements.length > 0 && (
-              <div className="bg-gradient-to-r from-blue-600/20 to-purple-600/20 border border-blue-600/30 rounded-lg p-4">
-                <div className="flex items-center gap-2 mb-3">
-                  <Megaphone className="w-5 h-5 text-blue-500" />
-                  <h3 className="font-minecraftia text-blue-500 text-sm">Group Announcements</h3>
-                </div>
-                <div className="space-y-2">
-                  {selectedGroup.announcements.slice(0, 3).map((announcement, index) => (
-                    <div key={`announcement-${index}`} className="text-neutral-200 text-sm bg-neutral-800/50 rounded p-2">
-                      {announcement}
-                    </div>
-                  ))}
-                  {selectedGroup.announcements.length > 3 && (
-                    <div className="text-neutral-400 text-xs text-center mt-2">
-                      +{selectedGroup.announcements.length - 3} more announcements
-                    </div>
-                  )}
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={copyMotd}
+                    title="Copy MOTD"
+                    className="p-1.5 rounded hover:bg-yellow-600/20 text-yellow-400"
+                  >
+                    <Copy className="w-4 h-4" />
+                  </button>
                 </div>
               </div>
-            )}
-
-            {(!selectedGroup.motd && (!selectedGroup.announcements || selectedGroup.announcements.length === 0)) && (
-              <div className="bg-neutral-700/50 border border-neutral-600 rounded-lg p-6 text-center">
-                <UsersIcon className="w-12 h-12 text-neutral-500 mx-auto mb-3" />
-                <h3 className="font-minecraftia text-neutral-300 text-sm mb-2">New Group</h3>
-                <p className="text-neutral-500 text-xs">
-                  This group is just getting started! Be the first to send a message and get the conversation going.
-                </p>
+              <div className="text-neutral-200 text-sm leading-relaxed whitespace-pre-wrap break-words">
+                {motdExpanded ? linkify(motdText) : linkify(getMotdPreview())}
               </div>
-            )}
-          </div>
-        )}
+              {(motdText.length > 240 || motdText.split(/\r?\n/).length > 5) && (
+                <div className="mt-2 text-right">
+                  <button
+                    onClick={() => setMotdExpanded(e => !e)}
+                    className="text-xs text-yellow-400 hover:text-yellow-300"
+                  >
+                    {motdExpanded ? 'Show less' : 'Show more'}
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          <GroupAnnouncements
+            group={selectedGroup}
+            userRole={userRole}
+            currentUser={currentUser}
+          />
+
+        </div>
 
         <div>
           <h3 className="font-minecraftia text-neutral-200 text-sm mb-4">
@@ -145,18 +183,17 @@ const GroupDetailsArea: React.FC<GroupDetailsAreaProps> = ({
               </div>
             ) : (
               <>
-                {/* Online Members */}
                 {groupMembers.filter(member => member.online).length > 0 && (
                   <div>
-                    <h4 className="text-xs text-green-400 font-minecraftia mb-2">
+                    <h4 className="text-xs text-green-400 font-inter mb-2">
                       Online — {groupMembers.filter(member => member.online).length}
                     </h4>
-                    {groupMembers.filter(member => member.online).map((member) => (
-                      <div key={`member-${member.playerUUID}`} className="flex items-center justify-between p-3 bg-neutral-700 rounded-lg mb-2">
+                    {groupMembers.filter(member => member.online).map((member, idx) => (
+                      <div key={`member-${member.playerUUID || member.playerName || 'unknown'}-${member.joinedAt || idx}`} className="flex items-center justify-between p-3 bg-neutral-700 rounded-lg mb-2">
                         <div className="flex items-center gap-3">
                           <div className="relative">
                             <Image
-                              src={getPlayerHead(member.playerName, member.playerUUID)}
+                              src={getPlayerHead(member.playerUUID, member.playerName)}
                               alt={member.playerName}
                               width={32}
                               height={32}
@@ -166,13 +203,13 @@ const GroupDetailsArea: React.FC<GroupDetailsAreaProps> = ({
                           </div>
                           <div>
                             <div className="flex items-center gap-2">
-                              <span className="text-white font-minecraftia text-sm">{member.playerName}</span>
+                              <span className="text-white font-inter font-semibold text-sm">{member.playerName}</span>
                               {member.role === 'OWNER' && <Crown className="w-4 h-4 text-yellow-500" />}
                               {member.role === 'ADMIN' && <Shield className="w-4 h-4 text-blue-500" />}
                               {member.rank && <RankBadge rank={member.rank} />}
                             </div>
                             <div className="text-xs text-neutral-400">
-                              {member.role} • Joined {new Date(member.joinedAt).toLocaleDateString()}
+                              {member.role}
                             </div>
                           </div>
                         </div>
@@ -186,12 +223,12 @@ const GroupDetailsArea: React.FC<GroupDetailsAreaProps> = ({
                     <h4 className="text-xs text-neutral-500 font-inter mb-2">
                       Offline — {groupMembers.filter(member => !member.online).length}
                     </h4>
-                    {groupMembers.filter(member => !member.online).map((member) => (
-                      <div key={`member-${member.playerUUID}`} className="flex items-center justify-between p-3 bg-neutral-700 rounded-lg mb-2">
+                    {groupMembers.filter(member => !member.online).map((member, idx) => (
+                      <div key={`member-${member.playerUUID || member.playerName || 'unknown'}-${member.joinedAt || idx}`} className="flex items-center justify-between p-3 bg-neutral-700 rounded-lg mb-2">
                         <div className="flex items-center gap-3">
                           <div className="relative">
                             <Image
-                              src={getPlayerHead(member.playerName, member.playerUUID)}
+                              src={getPlayerHead(member.playerUUID, member.playerName)}
                               alt={member.playerName}
                               width={32}
                               height={32}
@@ -200,13 +237,13 @@ const GroupDetailsArea: React.FC<GroupDetailsAreaProps> = ({
                           </div>
                           <div>
                             <div className="flex items-center gap-2">
-                              <span className="text-neutral-400 font-minecraftia text-sm">{member.playerName}</span>
+                              <span className="text-neutral-400 font-inter font-semibold text-sm">{member.playerName}</span>
                               {member.role === 'OWNER' && <Crown className="w-4 h-4 text-yellow-500 opacity-60" />}
                               {member.role === 'ADMIN' && <Shield className="w-4 h-4 text-blue-500 opacity-60" />}
                               {member.rank && <RankBadge rank={member.rank} />}
                             </div>
                             <div className="text-xs text-neutral-500">
-                              {member.role} • Joined {new Date(member.joinedAt).toLocaleDateString()}
+                              {member.role}
                             </div>
                           </div>
                         </div>

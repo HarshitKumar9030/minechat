@@ -57,6 +57,10 @@ public class WebAPIHandler {
                 handleWebFriendMessage(session, data);
                 break;
 
+            case "direct_message":
+                handleWebDirectMessage(session, data);
+                break;
+
             case "group_message":
                 handleWebGroupMessage(session, data);
                 break;
@@ -150,7 +154,7 @@ public class WebAPIHandler {
     // Web friend msg handler
     private void handleWebFriendMessage(WebSession session, JsonObject data) {
         String targetName = data.get("target").getAsString();
-        String message = data.get("message").getAsString();
+    String message = data.has("content") ? data.get("content").getAsString() : data.get("message").getAsString();
 
         // Prevent self-messaging
         if (session.getPlayerName().equalsIgnoreCase(targetName)) {
@@ -158,51 +162,150 @@ public class WebAPIHandler {
             return;
         }
 
-        Player target = Bukkit.getPlayerExact(targetName);
-        if (target == null || !target.isOnline()) {
-            sendWebResponse(session.getSessionId(), "error", "Player not online");
-            return;
-        }
-
-        // Verify they're friends
+        // Get target player (online or offline)
+        Player onlineTarget = Bukkit.getPlayerExact(targetName);
+        
+        // Get target UUID from database if player is offline
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
-            boolean areFriends = friendManager.areFriends(session.getPlayerId(), target.getUniqueId());
+            UUID targetUUID = null;
+            if (onlineTarget != null) {
+                targetUUID = onlineTarget.getUniqueId();
+            } else {
+                // Try to get UUID from database for offline player
+                targetUUID = getPlayerUUID(targetName);
+            }
+            
+            if (targetUUID == null) {
+                sendWebResponse(session.getSessionId(), "error", "Player not found");
+                return;
+            }
+
+            boolean areFriends = friendManager.areFriends(session.getPlayerId(), targetUUID);
 
             if (!areFriends) {
                 sendWebResponse(session.getSessionId(), "error", "You're not friends with this player");
                 return;
             }
 
-            // Send the message to Minecraft
+            final UUID finalTargetUUID = targetUUID;
+            
+            if (plugin.getDatabaseManager() != null) {
+                plugin.getDatabaseManager().storePrivateMessage(
+                    session.getPlayerName(), session.getPlayerId(), 
+                    targetName, finalTargetUUID, 
+                    message, "web"
+                );
+            }
+
             Bukkit.getScheduler().runTask(plugin, () -> {
-                String format = plugin.getConfig().getString("private-messages.format",
-                    "&7[&dPM&7] &e{sender} &7→ &e{receiver}&7: &f{message}");
+                if (onlineTarget != null && onlineTarget.isOnline()) {
+                    String format = plugin.getConfig().getString("private-messages.format",
+                        "&7[&dPM&7] &e{sender} &7→ &e{receiver}&7: &f{message}");
 
-                String formattedMessage = format
-                    .replace("{sender}", session.getPlayerName() + " (Web)")
-                    .replace("{receiver}", target.getName())
-                    .replace("{message}", message);
+                    String formattedMessage = format
+                        .replace("{sender}", session.getPlayerName() + " (Web)")
+                        .replace("{receiver}", onlineTarget.getName())
+                        .replace("{message}", message);
 
-                Component messageComponent = Component.text(formattedMessage.replace("&", "§"));
-                target.sendMessage(messageComponent);
+                    Component messageComponent = Component.text(formattedMessage.replace("&", "§"));
+                    onlineTarget.sendMessage(messageComponent);
+                }
 
                 // Send confirmation back to web
                 sendWebResponse(session.getSessionId(), "message_sent", Map.of(
                     "type", "friend_message",
                     "target", targetName,
                     "message", message,
-                    "timestamp", System.currentTimeMillis()
+                    "timestamp", System.currentTimeMillis(),
+                    "delivered", onlineTarget != null && onlineTarget.isOnline()
                 ));
 
-                // Notify target's web sessions if they're online via web
-                broadcastMinecraftMessage(session.getPlayerId(), session.getPlayerName(),
-                    message, "friend_message", target.getUniqueId());
+                deliverFriendMessageToWeb(finalTargetUUID, targetName,
+                    session.getPlayerId(), session.getPlayerName(), message, "web");
             });
         });
     }
 
+    private void handleWebDirectMessage(WebSession session, JsonObject data) {
+        String targetName = data.get("target").getAsString();
+        String message = data.has("content") ? data.get("content").getAsString() : data.get("message").getAsString();
+
+        if (session.getPlayerName().equalsIgnoreCase(targetName)) {
+            sendWebResponse(session.getSessionId(), "error", "You cannot send a message to yourself");
+            return;
+        }
+
+        Player onlineTarget = Bukkit.getPlayerExact(targetName);
+        
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            UUID targetUUID = null;
+            if (onlineTarget != null) {
+                targetUUID = onlineTarget.getUniqueId();
+            } else {
+                targetUUID = getPlayerUUID(targetName);
+            }
+            
+            if (targetUUID == null) {
+                sendWebResponse(session.getSessionId(), "error", "Player not found");
+                return;
+            }
+
+            final UUID finalTargetUUID = targetUUID;
+            
+            if (plugin.getDatabaseManager() != null) {
+                plugin.getDatabaseManager().storePrivateMessage(
+                    session.getPlayerName(), session.getPlayerId(), 
+                    targetName, finalTargetUUID, 
+                    message, "web"
+                );
+            }
+
+            Bukkit.getScheduler().runTask(plugin, () -> {
+                if (onlineTarget != null && onlineTarget.isOnline()) {
+                    String format = plugin.getConfig().getString("private-messages.format",
+                        "&7[&dPM&7] &e{sender} &7→ &e{receiver}&7: &f{message}");
+
+                    String formattedMessage = format
+                        .replace("{sender}", session.getPlayerName() + " (Web)")
+                        .replace("{receiver}", onlineTarget.getName())
+                        .replace("{message}", message);
+
+                    Component messageComponent = Component.text(formattedMessage.replace("&", "§"));
+                    onlineTarget.sendMessage(messageComponent);
+                }
+
+                sendWebResponse(session.getSessionId(), "message_sent", Map.of(
+                    "type", "direct_message",
+                    "target", targetName,
+                    "message", message,
+                    "timestamp", System.currentTimeMillis(),
+                    "delivered", onlineTarget != null && onlineTarget.isOnline()
+                ));
+
+                deliverFriendMessageToWeb(finalTargetUUID, targetName,
+                    session.getPlayerId(), session.getPlayerName(), message, "web");
+            });
+        });
+    }
+
+    private void deliverFriendMessageToWeb(UUID targetId, String targetName,
+                                           UUID senderId, String senderName,
+                                           String message, String source) {
+        Map<String, Object> data = new HashMap<>();
+        data.put("senderUUID", senderId.toString());
+        data.put("senderName", senderName);
+        data.put("targetUUID", targetId.toString());
+        data.put("targetName", targetName);
+        data.put("content", message);
+        data.put("timestamp", System.currentTimeMillis());
+        data.put("source", source == null ? "web" : source);
+
+        activeSessions.values().stream()
+            .filter(s -> s.getPlayerId().equals(targetId))
+            .forEach(s -> sendWebResponse(s.getSessionId(), "friend_message", data));
+    }
+
     private void handleWebGroupMessage(WebSession session, JsonObject data) {
-        // Handle both groupId and group name formats for backwards compatibility
         String groupIdStr = data.has("groupId") ? data.get("groupId").getAsString() : null;
         String groupNameParam = data.has("group") ? data.get("group").getAsString() : null;
         String message = data.has("content") ? data.get("content").getAsString() :
@@ -219,12 +322,10 @@ public class WebAPIHandler {
             String finalGroupName = null;
 
             if (groupIdStr != null) {
-                // Use groupId to find group directly
                 try {
                     foundGroupId = UUID.fromString(groupIdStr);
                     foundGroup = groupManager.getGroup(foundGroupId);
                     if (foundGroup != null) {
-                        // Verify user is member by checking if they're in the group's member list
                         List<Document> members = foundGroup.getList("members", Document.class);
                         boolean isMember = members.stream()
                             .anyMatch(member -> member.getString("playerId").equals(session.getPlayerId().toString()));
@@ -240,7 +341,6 @@ public class WebAPIHandler {
                     return;
                 }
             } else if (groupNameParam != null) {
-                // Find group by name (legacy method)
                 List<Document> playerGroups = groupManager.getPlayerGroupsAsDocuments(session.getPlayerId());
                 foundGroup = playerGroups.stream()
                         .filter(g -> g.getString("groupName").equalsIgnoreCase(groupNameParam))
@@ -258,16 +358,11 @@ public class WebAPIHandler {
                 return;
             }
 
-            // Create final variables for use in lambda
             final Document finalGroup = foundGroup;
             final UUID finalGroupId = foundGroupId;
             final String groupNameForLambda = finalGroupName;
 
-            // Store message for persistence - DISABLED: We don't want to store group messages
-            // groupManager.storeGroupMessage(finalGroupId, session.getPlayerId(),
-            //                              session.getPlayerName(), message, "web");
 
-            // Send to all online group members
             Bukkit.getScheduler().runTask(plugin, () -> {
                 String format = plugin.getConfig().getString("chat-groups.format",
                     "&7[&aGroup: &b{group}&7] &f{player}&7: &f{message}");
@@ -278,7 +373,6 @@ public class WebAPIHandler {
 
                 Component messageComponent = Component.text(formattedMessage.replace("&", "§"));
 
-                // Get group members and send to online players
                 List<Document> members = finalGroup.getList("members", Document.class);
                 for (Document member : members) {
                     String memberName = member.getString("playerName");
@@ -288,7 +382,6 @@ public class WebAPIHandler {
                     }
                 }
 
-                // Notify all web sessions in this group
                 broadcastToGroupWebSessions(finalGroupId, "group_message", Map.of(
                     "group", groupNameForLambda,
                     "groupId", finalGroupId.toString(),
@@ -312,7 +405,6 @@ public class WebAPIHandler {
         });
     }
 
-    // sends friends list to the web interface
     private void handleGetFriends(WebSession session) {
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             List<Document> friends = friendManager.getFriendList(session.getPlayerId());
@@ -334,7 +426,6 @@ public class WebAPIHandler {
         });
     }
 
-    // send group list to web
     private void handleGetGroups(WebSession session) {
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             List<Document> groups = groupManager.getPlayerGroupsAsDocuments(session.getPlayerId());
@@ -354,7 +445,6 @@ public class WebAPIHandler {
         });
     }
 
-    // recent group msgs
     private void handleGetGroupMessages(WebSession session, JsonObject data) {
         String groupId = data.get("groupId").getAsString();
         int limit = data.has("limit") ? data.get("limit").getAsInt() : 50;
@@ -580,7 +670,6 @@ public class WebAPIHandler {
         String targetName = data.get("targetName").getAsString();
 
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
-            // Verify user is group admin/owner
             if (!groupManager.isGroupAdmin(UUID.fromString(groupId), session.getPlayerId())) {
                 sendWebResponse(session.getSessionId(), "error", "You don't have permission to ban members");
                 return;
@@ -790,13 +879,12 @@ public class WebAPIHandler {
                     "targetName", targetName
                 ));
 
-                // notify target player if they have an active web session
                 WebSession targetSession = activeSessions.get(target.getUniqueId());
                 if (targetSession != null) {
                     sendWebResponse(targetSession.getSessionId(), "group_invite_received", Map.of(
                         "groupId", groupId,
                         "inviterName", session.getPlayerName(),
-                        "groupName", getGroupName(groupId) // Helper method to get group name
+                        "groupName", getGroupName(groupId) 
                     ));
                 }
             } else {
@@ -849,7 +937,6 @@ public class WebAPIHandler {
                     "groupId", groupId
                 ));
 
-                // Notify remaining group members
                 broadcastToGroupWebSessions(UUID.fromString(groupId), "member_left", Map.of(
                     "groupId", groupId,
                     "playerName", session.getPlayerName()
@@ -908,7 +995,6 @@ public class WebAPIHandler {
         }
     }
 
-    // broadcasts a message from Minecraft to web clients
     public void broadcastMinecraftMessage(UUID senderId, String senderName, String message, String type, Object context) {
         Map<String, Object> data = new HashMap<>();
         data.put("sender", senderName);
@@ -966,6 +1052,15 @@ public class WebAPIHandler {
             .forEach(session -> sendWebResponse(session.getSessionId(), type, data));
     }
 
+    public void broadcastGroupMessage(UUID groupId, Map<String, Object> messageData) {
+        if (groupId == null || messageData == null) return;
+        try {
+            broadcastToGroupWebSessions(groupId, "group_message", messageData);
+        } catch (Exception e) {
+            plugin.getLogger().warning("Failed to broadcast group message: " + e.getMessage());
+        }
+    }
+
     private boolean isPlayerInGroup(UUID playerId, UUID groupId) {
         List<Document> playerGroups = groupManager.getPlayerGroupsAsDocuments(playerId);
         return playerGroups.stream()
@@ -973,7 +1068,6 @@ public class WebAPIHandler {
     }
 
     private UUID getPlayerUUID(String playerName) {
-        // First try to get from online players
         Player player = Bukkit.getPlayerExact(playerName);
         if (player != null) {
             return player.getUniqueId();
@@ -985,7 +1079,6 @@ public class WebAPIHandler {
                 return playerUUID;
             }
 
-            // if not found(which is rare), try to get from offline players using bukkit api
             org.bukkit.OfflinePlayer offlinePlayer = Bukkit.getOfflinePlayer(playerName);
             if (offlinePlayer.hasPlayedBefore()) {
                 return offlinePlayer.getUniqueId();
@@ -1042,7 +1135,6 @@ public class WebAPIHandler {
         public void addResponse(Map<String, Object> response) {
             synchronized (responseQueue) {
                 responseQueue.add(response);
-                // keep only last 100 responses to prevent memory leaks
                 if (responseQueue.size() > 100) {
                     responseQueue.remove(0);
                 }

@@ -1,16 +1,18 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Megaphone, Plus, Edit, Trash2, Save, X } from 'lucide-react';
 import { GroupInfo, moderationApi } from '@/lib/api';
 
 interface GroupAnnouncementsProps {
   group: GroupInfo;
   userRole: string;
+  currentUser?: { playerUUID: string; playerName: string } | null;
   onUpdate?: () => void;
 }
 
 const GroupAnnouncements: React.FC<GroupAnnouncementsProps> = ({
   group,
   userRole,
+  currentUser,
   onUpdate
 }) => {
   const [announcements, setAnnouncements] = useState<string[]>(group.announcements || []);
@@ -20,16 +22,20 @@ const GroupAnnouncements: React.FC<GroupAnnouncementsProps> = ({
   const [showAddForm, setShowAddForm] = useState(false);
   const [processing, setProcessing] = useState<number | null>(null);
 
+  useEffect(() => {
+    setAnnouncements(group.announcements || []);
+  }, [group.announcements]);
+
   const canManage = userRole === 'OWNER' || userRole === 'ADMIN';
   const maxAnnouncements = 5;
   const maxLength = 200;
 
   const handleAddAnnouncement = async () => {
-    if (!newAnnouncement.trim() || announcements.length >= maxAnnouncements) return;
+    if (!newAnnouncement.trim() || announcements.length >= maxAnnouncements || !currentUser) return;
 
     setProcessing(-1);
     try {
-      await moderationApi.addAnnouncement(group.groupId, newAnnouncement.trim());
+      await moderationApi.addAnnouncement(group.groupId, newAnnouncement.trim(), currentUser.playerUUID);
       setAnnouncements([...announcements, newAnnouncement.trim()]);
       setNewAnnouncement('');
       setShowAddForm(false);
@@ -42,11 +48,11 @@ const GroupAnnouncements: React.FC<GroupAnnouncementsProps> = ({
   };
 
   const handleEditAnnouncement = async (index: number) => {
-    if (!editingText.trim()) return;
+    if (!editingText.trim() || !currentUser) return;
 
     setProcessing(index);
     try {
-      await moderationApi.updateAnnouncement(group.groupId, index, editingText.trim());
+      await moderationApi.updateAnnouncement(group.groupId, index, editingText.trim(), currentUser.playerUUID);
       const updated = [...announcements];
       updated[index] = editingText.trim();
       setAnnouncements(updated);
@@ -61,9 +67,10 @@ const GroupAnnouncements: React.FC<GroupAnnouncementsProps> = ({
   };
 
   const handleDeleteAnnouncement = async (index: number) => {
+    if (!currentUser) return;
     setProcessing(index);
     try {
-      await moderationApi.removeAnnouncement(group.groupId, index);
+      await moderationApi.removeAnnouncement(group.groupId, index, currentUser.playerUUID);
       const updated = announcements.filter((_, i) => i !== index);
       setAnnouncements(updated);
       onUpdate?.();

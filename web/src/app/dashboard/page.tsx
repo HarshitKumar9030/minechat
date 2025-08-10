@@ -4,7 +4,7 @@ import { MoveRight, MoveLeft } from 'lucide-react';
 import { SERVER_NAME } from '@/lib/constants';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import { MinechatAPI, Player, FriendInfo } from '@/lib/api';
+import { MinechatAPI, Player, FriendInfo, getPlayerHead } from '@/lib/api';
 
 export interface NavigationCard {
     id: string;
@@ -28,6 +28,13 @@ const navigationCards = [
     description: 'Manage your friend list and requests',
     image: '/dashboard/misc.png',
     href: '/friends'
+  },
+  {
+    id: 'groups',
+    title: 'Groups',
+    description: 'Create and manage group chats',
+    image: '/friends.png',
+    href: '/groups'
   },
   {
     id: 'messages',
@@ -65,7 +72,7 @@ const DashboardPage = () => {
         setUser({ 
           playerUUID: userData.playerUUID, 
           playerName: userData.playerName,
-          rank: userData.rank // Keep for fallback only
+          rank: userData.rank 
         });
       } catch {
         router.push('/');
@@ -131,7 +138,7 @@ const DashboardPage = () => {
 
   return (
     <main className='min-h-screen w-full flex flex-col gap-8 justify-center items-center p-4'>
-      <div className="text-center mb-6">
+      <div className="text-center mb-6 mt-6">
         <h1 className="text-2xl md:text-3xl font-minecraftia text-neutral-300 mb-4 leading-none">
           Welcome back, <span className='text-yellow-600'>{user?.playerName || 'Player'}</span>
         </h1>
@@ -269,13 +276,13 @@ const DashboardPage = () => {
               >
                 <div className="relative inline-block mb-2">
                   <Image
-                    src={`https://crafatar.com/avatars/${friend.friendUUID}?size=32&overlay`}
+                    src={getPlayerHead(friend.friendName, friend.friendUUID, 32)}
                     alt={friend.friendName}
                     width={32}
                     height={32}
                     className="rounded-lg"
                     onError={(e) => {
-                      e.currentTarget.src = 'https://crafatar.com/avatars/5e9b103b-dfc2-4b59-be29-eb7523248b5d?size=32&overlay';
+                      e.currentTarget.src = getPlayerHead('steve', undefined, 32);
                     }}
                   />
                   <div className={`absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full border border-neutral-800 ${

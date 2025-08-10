@@ -50,6 +50,11 @@ const GroupSidebar: React.FC<GroupSidebarProps> = ({
     setView(newView);
     if (newView !== 'my-groups' && newView !== 'messages') {
       setSelectedGroup(null);
+      return;
+    }
+    const list = filteredGroups.length > 0 ? filteredGroups : groups;
+    if (!selectedGroup && list.length > 0) {
+      setSelectedGroup(list[0]);
     }
   };
 
@@ -59,7 +64,7 @@ const GroupSidebar: React.FC<GroupSidebarProps> = ({
   );
 
   return (
-    <div className="bg-neutral-800 border border-neutral-700 rounded-lg p-4">
+  <div className="bg-neutral-800 border border-neutral-700 rounded-lg p-4 h-full overflow-hidden flex flex-col">
       <div className="mb-4">
         <nav className="space-y-1">
           <button
@@ -118,24 +123,22 @@ const GroupSidebar: React.FC<GroupSidebarProps> = ({
             )}
           </button>
 
-          {groups.some(group => group.role === 'OWNER' || group.role === 'ADMIN') && (
-            <button
-              onClick={() => handleViewChange('management')}
-              className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-all duration-300 ${
-                view === 'management'
-                  ? 'bg-yellow-600 text-neutral-900'
-                  : 'text-neutral-300 hover:bg-neutral-700'
-              }`}
-            >
-              <Settings className="w-4 h-4" />
-              <span className="font-minecraftia mt-3 text-sm">Management</span>
-            </button>
-          )}
+          <button
+            onClick={() => handleViewChange('management')}
+            className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-all duration-300 ${
+              view === 'management'
+                ? 'bg-yellow-600 text-neutral-900'
+                : 'text-neutral-300 hover:bg-neutral-700'
+            }`}
+          >
+            <Settings className="w-4 h-4" />
+            <span className="font-minecraftia mt-3 text-sm">Management</span>
+          </button>
         </nav>
       </div>
 
       {(view === 'my-groups' || view === 'messages') && (
-        <div>
+        <div className="min-h-0 flex-1 flex flex-col">
           <div className="relative mb-4">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-neutral-400" />
             <input
@@ -147,7 +150,7 @@ const GroupSidebar: React.FC<GroupSidebarProps> = ({
             />
           </div>
 
-          <div className="space-y-2 max-h-96 overflow-y-auto">
+          <div className="space-y-2 overflow-y-auto min-h-0 flex-1">
             {loading ? (
               <div className="flex items-center justify-center py-8">
                 <div className="w-6 h-6 border-2 border-neutral-400 border-t-transparent rounded-full animate-spin"></div>

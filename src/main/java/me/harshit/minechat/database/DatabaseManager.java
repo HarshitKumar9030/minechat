@@ -13,7 +13,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
-// This class manages the connection to MongoDB and provides methods to store and retrieve chat messages
 public class DatabaseManager {
 
     private MongoClient mongoClient;
@@ -98,6 +97,57 @@ public class DatabaseManager {
 
         } catch (Exception e) {
             plugin.getLogger().warning("Failed to retrieve player messages: " + e.getMessage());
+            return new ArrayList<>();
+        }
+    }
+
+    public void storePrivateMessage(String senderName, UUID senderUUID, String targetName, UUID targetUUID, String message, String source) {
+        try {
+            Document privateMessageDoc = new Document()
+                    .append("type", "private_message")
+                    .append("senderName", senderName)
+                    .append("senderUUID", senderUUID.toString())
+                    .append("targetName", targetName)
+                    .append("targetUUID", targetUUID.toString())
+                    .append("message", message)
+                    .append("source", source) // "web" or "minecraft"
+                    .append("timestamp", LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME))
+                    .append("date", System.currentTimeMillis()); 
+
+            chatCollection.insertOne(privateMessageDoc);
+
+        } catch (Exception e) {
+            plugin.getLogger().warning("Failed to store private message: " + e.getMessage());
+        }
+    }
+
+    public List<Document> getPrivateMessages(String player1, String player2, int limit) {
+        try {
+            List<Document> messages = new ArrayList<>();
+
+            Document query = new Document("$and", List.of(
+                new Document("type", "private_message"),
+                new Document("$or", List.of(
+                    new Document("$and", List.of(
+                        new Document("senderName", player1),
+                        new Document("targetName", player2)
+                    )),
+                    new Document("$and", List.of(
+                        new Document("senderName", player2),
+                        new Document("targetName", player1)
+                    ))
+                ))
+            ));
+
+            chatCollection.find(query)
+                    .sort(new Document("date", 1)) 
+                    .limit(limit)
+                    .into(messages);
+
+            return messages;
+
+        } catch (Exception e) {
+            plugin.getLogger().warning("Failed to retrieve private messages: " + e.getMessage());
             return new ArrayList<>();
         }
     }

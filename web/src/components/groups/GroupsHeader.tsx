@@ -2,7 +2,7 @@ import React from 'react';
 import { Plus, Users, Search } from 'lucide-react';
 
 interface GroupsHeaderProps {
-  view: 'my-groups' | 'discover' | 'invites' | 'messages' | 'management';
+  view: 'my-groups' | 'discover' | 'invites' | 'messages';
   onCreateGroup?: () => void;
   onJoinGroup?: () => void;
   groupCount?: number;
@@ -94,6 +94,7 @@ const GroupsHeader: React.FC<GroupsHeaderProps> = ({
         )}
       </div>
 
+      {/* Search Bar for applicable views */}
       {view === 'my-groups' && onSearchChange && (
         <div className="mt-4">
           <div className="relative">

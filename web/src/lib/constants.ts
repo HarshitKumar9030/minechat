@@ -15,11 +15,13 @@ export const HOMEPAGE_WELCOME_MESSAGE = `Welcome to ${SERVER_NAME}! Connect with
 
 // API Configuration
 export const API_BASE_URL = 'http://localhost:8080/api';
-export const WEBSOCKET_URL = 'ws://localhost:8081/ws';
+export const WS_URL = 'ws://localhost:8081/ws';
+
+
 
 // For production, update these to your domain:
 // export const API_BASE_URL = 'https://yourserver.com/api';
-// export const WEBSOCKET_URL = 'wss://yourserver.com/ws';
+// export const WS_URL = 'wss://yourserver.com/ws';
 
 // change colors from globals.css
 

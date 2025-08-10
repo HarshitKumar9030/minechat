@@ -63,17 +63,26 @@
   image-rendering: crisp-edges;
 }
 
-.animate-glow {
-  animation: glow 2s ease-in-out infinite;
+.scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: #404040 #262626;
 }
 
-.animate-bounce-subtle {
-  animation: bounce-subtle 2s ease-in-out infinite;
+.scrollbar-thin::-webkit-scrollbar {
+  width: 6px;
 }
 
-.pixelated {
-  image-rendering: pixelated;
-  image-rendering: -moz-crisp-edges;
-  image-rendering: crisp-edges;
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: #262626;
+  border-radius: 3px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: #404040;
+  border-radius: 3px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background: #525252;
 }
 
