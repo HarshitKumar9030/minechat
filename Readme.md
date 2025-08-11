@@ -2,7 +2,7 @@
 
 Minecraft chat plugin with ranks, friends, groups, MongoDB logging, and a real-time web interface (REST + WebSocket).
 
-• Build on top: see docs/PLUGIN_API.md for FriendAPI & GroupAPI services
+• Build on top: see `docs/PLUGIN_API.md` for FriendAPI & GroupAPI services
 
 ## Features
 - Chat formatting with ranks (Vault/LuckPerms/PowerRanks supported)
