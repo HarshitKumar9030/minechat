@@ -4,6 +4,19 @@ Minecraft chat plugin with ranks, friends, groups, MongoDB logging, and a real-t
 
 • Build on top: see `docs/PLUGIN_API.md` for FriendAPI & GroupAPI services
 
+## Demo video
+- ▶ Watch: https://slack-files.com/T0266FRGM-F099T2X26J2-202cfa0661
+
+## Screenshots
+
+Below are a few screenshots from the web interface and features.
+
+![Home Page](gallery/Screenshot%202025-08-11%20114448.png)
+![Groups Page](gallery/Screenshot%202025-08-11%20110908.png)
+![Friends Page](gallery/Screenshot%202025-08-11%20104511.png)
+![Settings](gallery/Screenshot%202025-08-11%20114605.png)
+![Dashboard](gallery/Screenshot%20(465).png)
+
 ## Features
 - Chat formatting with ranks (Vault/LuckPerms/PowerRanks supported)
 - Private messages with reply and database logging
