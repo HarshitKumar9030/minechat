@@ -46,13 +46,13 @@ const GroupChatArea: React.FC<GroupChatAreaProps> = ({
     
     try {
       setLoading(true);
-      const response = await api.getGroupMessages(group.groupId, 50);
+    const response = await api.getGroupMessages(group.groupId, 50);
       if (response.messages) {
         const formattedMessages: GroupMessage[] = response.messages.map((msg) => ({
           messageId: msg.messageId || `${msg.timestamp}-${Math.random()}`,
           senderId: msg.senderUUID,
           senderName: msg.senderName,
-          message: msg.content,
+      message: msg.content,
           timestamp: msg.timestamp,
           source: 'minecraft' // def to mc, websocket will handle web messages
         }));
@@ -110,13 +110,13 @@ const GroupChatArea: React.FC<GroupChatAreaProps> = ({
   useEffect(() => {
     if (!websocket || !group) return;
 
-    const handleMessage = (message: ChatMessage) => {
+  const handleMessage = (message: ChatMessage) => {
       if (isSameGroup(message, group)) {
         const newMsg: GroupMessage = {
           messageId: message.messageId || `${Date.now()}-${Math.random()}`,
           senderId: message.senderUUID || '',
-          senderName: message.senderName || 'Unknown',
-          message: (message as any).message || message.content || '',
+      senderName: message.senderName || (message as any).sender || (message as any).username || 'Unknown',
+      message: message.content || (message as any).message || '',
           timestamp: message.timestamp || Date.now(),
           source: message.source || 'web'
         };
@@ -135,7 +135,7 @@ const GroupChatArea: React.FC<GroupChatAreaProps> = ({
     if (!newMessage.trim() || !user || !websocket || !isConnected || !group) return;
 
     try {
-      websocket.sendGroupMessage(group.groupId, newMessage.trim());
+  websocket.sendGroupMessage(group.groupId, newMessage.trim(), group.groupName);
       setNewMessage('');
     } catch (error) {
       console.error('Failed to send message:', error);

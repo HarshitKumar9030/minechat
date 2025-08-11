@@ -864,14 +864,15 @@ public class WebAPIHandler {
                 return;
             }
 
-            Player target = Bukkit.getPlayerExact(targetName);
-            if (target == null) {
+            Player targetOnline = Bukkit.getPlayerExact(targetName);
+            UUID targetUUID = (targetOnline != null) ? targetOnline.getUniqueId() : groupManager.getPlayerUUID(targetName);
+            if (targetUUID == null) {
                 sendWebResponse(session.getSessionId(), "error", "Player not found");
                 return;
             }
 
             boolean success = groupManager.sendGroupInvite(UUID.fromString(groupId),
-                session.getPlayerId(), session.getPlayerName(), target.getUniqueId(), target.getName());
+                session.getPlayerId(), session.getPlayerName(), targetUUID, targetName);
 
             if (success) {
                 sendWebResponse(session.getSessionId(), "group_invite_sent", Map.of(
@@ -879,7 +880,7 @@ public class WebAPIHandler {
                     "targetName", targetName
                 ));
 
-                WebSession targetSession = activeSessions.get(target.getUniqueId());
+                WebSession targetSession = activeSessions.get(targetUUID);
                 if (targetSession != null) {
                     sendWebResponse(targetSession.getSessionId(), "group_invite_received", Map.of(
                         "groupId", groupId,

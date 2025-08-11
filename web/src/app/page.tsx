@@ -135,7 +135,7 @@ export default function Home() {
               ) : (
                 <>
                   <LogIn size={18} className="text-black" />
-                  <span className="leading-none font-semibold">Login to Web Chat</span>
+                  <span className="leading-none mt-3 font-semibold">Login to Web Chat</span>
                 </>
               )}
             </span>

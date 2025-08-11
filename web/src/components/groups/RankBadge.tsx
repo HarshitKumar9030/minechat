@@ -5,69 +5,90 @@ interface RankBadgeProps {
   className?: string;
 }
 
-const RankBadge: React.FC<RankBadgeProps> = ({ rank, className = '' }) => {
-  const parseMinecraftColors = (text: string) => {
-    const colorMap: Record<string, string> = {
-      '§0': '#000000', // Black
-      '§1': '#0000AA', // Dark Blue
-      '§2': '#00AA00', // Dark Green
-      '§3': '#00AAAA', // Dark Aqua
-      '§4': '#AA0000', // Dark Red
-      '§5': '#AA00AA', // Dark Purple
-      '§6': '#FFAA00', // Gold
-      '§7': '#AAAAAA', // Gray
-      '§8': '#555555', // Dark Gray
-      '§9': '#5555FF', // Blue
-      '§a': '#55FF55', // Green
-      '§b': '#55FFFF', // Aqua
-      '§c': '#FF5555', // Red
-      '§d': '#FF55FF', // Light Purple
-      '§e': '#FFFF55', // Yellow
-      '§f': '#FFFFFF', // White
-      '§k': '', // Obfuscated (skip)
-      '§l': '', // Bold
-      '§m': '', // Strikethrough
-      '§n': '', // Underline
-      '§o': '', // Italic
-      '§r': '', // Reset
+const MC_COLORS: Record<string, string> = {
+  '0': '#000000', // Black
+  '1': '#0000AA', // Dark Blue
+  '2': '#00AA00', // Dark Green
+  '3': '#00AAAA', // Dark Aqua
+  '4': '#AA0000', // Dark Red
+  '5': '#AA00AA', // Dark Purple
+  '6': '#FFAA00', // Gold
+  '7': '#AAAAAA', // Gray
+  '8': '#555555', // Dark Gray
+  '9': '#5555FF', // Blue
+  a: '#55FF55', // Green
+  b: '#55FFFF', // Aqua
+  c: '#FF5555', // Red
+  d: '#FF55FF', // Light Purple
+  e: '#FFFF55', // Yellow
+  f: '#FFFFFF', // White
+};
+
+const renderFormattedRank = (text: string) => {
+  if (!text) return null;
+
+  const parts: React.ReactNode[] = [];
+  let currentColor = '#FFFFFF';
+  let bold = false;
+  let italic = false;
+  let underline = false;
+  let strikethrough = false;
+
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (ch === '§' && i + 1 < text.length) {
+      const code = text[i + 1].toLowerCase();
+      i++; 
+
+      if (code in MC_COLORS) {
+        currentColor = MC_COLORS[code];
+      } else {
+        switch (code) {
+          case 'l':
+            bold = true; break;
+          case 'o':
+            italic = true; break;
+          case 'n':
+            underline = true; break;
+          case 'm':
+            strikethrough = true; break;
+          case 'r':
+            currentColor = '#FFFFFF';
+            bold = italic = underline = strikethrough = false;
+            break;
+         
+        }
+      }
+      continue;
+    }
+
+   
+    const style = {
+      color: currentColor,
+      fontWeight: bold ? 700 : 600,
+      fontStyle: italic ? 'italic' as const : 'normal' as const,
+      textDecoration: [underline ? 'underline' : '', strikethrough ? 'line-through' : '']
+        .filter(Boolean)
+        .join(' ') || 'none',
     };
-
-    let cleanText = text.replace(/§[0-9a-fk-or]/g, '');
-    
-    cleanText = cleanText.replace(/^\[|\]$/g, '');
-    
-    return cleanText.trim();
-  };
-
-  const getRankColor = (rankText: string) => {
-    const lower = rankText.toLowerCase();
-    
-    if (lower.includes('owner')) return 'bg-red-600 text-white';
-    if (lower.includes('admin')) return 'bg-red-500 text-white';
-    if (lower.includes('mod')) return 'bg-blue-500 text-white';
-    if (lower.includes('vip') || lower.includes('mvp')) return 'bg-yellow-500 text-black';
-    if (lower.includes('member')) return 'bg-gray-500 text-white';
-    if (lower.includes('staff')) return 'bg-purple-500 text-white';
-    if (lower.includes('helper')) return 'bg-green-500 text-white';
-    if (lower.includes('builder')) return 'bg-orange-500 text-white';
-    
-    return 'bg-gray-600 text-white';
-  };
-
-  if (!rank || rank.trim() === '') {
-    return null;
+    parts.push(
+      <span key={parts.length} style={style} className="font-inter">
+        {ch}
+      </span>
+    );
   }
 
-  const cleanRank = parseMinecraftColors(rank);
-  const colorClass = getRankColor(cleanRank);
+  return parts;
+};
 
-  if (!cleanRank) {
-    return null;
-  }
+const RankBadge: React.FC<RankBadgeProps> = ({ rank, className = '' }) => {
+  if (!rank || rank.trim() === '') return null;
 
   return (
-    <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-bold ${colorClass} ${className}`}>
-      {cleanRank}
+    <span
+      className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs border border-neutral-700/50 bg-neutral-800/40 ${className}`}
+    >
+      {renderFormattedRank(rank)}
     </span>
   );
 };

@@ -218,7 +218,8 @@ export class MinechatWebSocket {
           groupId: message.data.groupId || message.data.group, 
           groupName: message.data.group, 
           senderUUID: message.data.senderUUID || crypto.randomUUID(),
-          senderName: message.data.senderName || message.data.sender, 
+          senderName: message.data.senderName || message.data.sender || message.data.username || message.data.playerName, 
+          content: message.data.content ?? message.data.message ?? '',
           timestamp: message.data.timestamp || Date.now(),
           messageType: message.data.messageType || 'TEXT',
           source: message.data.source || 'minecraft',
@@ -388,7 +389,7 @@ export class MinechatWebSocket {
     this.addListener('message_sent', callback);
   }
 
-  sendGroupMessage(groupId: string, content: string): void {
+  sendGroupMessage(groupId: string, content: string, groupName?: string): void {
     if (!this.isAuthenticated) {
       console.warn('Not authenticated, cannot send group message');
       return;
@@ -398,7 +399,9 @@ export class MinechatWebSocket {
       type: 'group_message',
       data: {
         groupId: groupId,
-        content: content
+        group: groupName ?? undefined,
+        content: content,
+        message: content
       },
       timestamp: Date.now()
     });

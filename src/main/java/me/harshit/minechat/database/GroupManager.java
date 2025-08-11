@@ -13,6 +13,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import org.bson.types.ObjectId;
 
 // db ops for groups
 
@@ -64,24 +65,37 @@ public class GroupManager {
 
     public boolean sendGroupInvite(UUID groupId, UUID inviterId, String inviterName, UUID targetId, String targetName) {
         try {
+            Document groupDoc = getGroup(groupId);
+            if (groupDoc == null) return false;
+
+            List<Document> members = groupDoc.getList("members", Document.class);
+            boolean alreadyMember = members != null && members.stream()
+                    .anyMatch(m -> targetId.toString().equals(m.getString("playerId")));
+            if (alreadyMember) return false;
+
             Document existingInvite = groupInvitesCollection.find(
                     new Document("groupId", groupId.toString())
                             .append("targetId", targetId.toString())
                             .append("status", "pending")
             ).first();
+            if (existingInvite != null) return false;
 
-            if (existingInvite != null) {
-                return false; // Invite already exists
-            }
+            String inviteId = UUID.randomUUID().toString();
+            String groupName = groupDoc.getString("groupName");
 
             Document inviteDoc = new Document()
+                    .append("inviteId", inviteId)
                     .append("groupId", groupId.toString())
-                    .append("inviterId", inviterId.toString())
+                    .append("groupName", groupName)
+                    .append("inviterUUID", inviterId.toString())
                     .append("inviterName", inviterName)
-                    .append("targetId", targetId.toString())
-                    .append("targetName", targetName)
+                    .append("inviteeUUID", targetId.toString())
+                    .append("inviteeName", targetName)
                     .append("timestamp", System.currentTimeMillis())
-                    .append("status", "pending");
+                    .append("status", "pending")
+                    .append("inviterId", inviterId.toString())
+                    .append("targetId", targetId.toString())
+                    .append("targetName", targetName);
 
             groupInvitesCollection.insertOne(inviteDoc);
             return true;
@@ -1299,12 +1313,69 @@ public class GroupManager {
 
     public List<Document> getGroupInvites(UUID playerUUID) {
         try {
-            List<Document> invites = new ArrayList<>();
+            List<Document> rawInvites = new ArrayList<>();
             groupInvitesCollection.find(
                 new Document("targetId", playerUUID.toString())
                     .append("status", "pending")
-            ).into(invites);
-            return invites;
+            ).into(rawInvites);
+
+            List<Document> result = new ArrayList<>();
+
+            for (Document invite : rawInvites) {
+                String groupIdStr = invite.getString("groupId");
+                if (groupIdStr == null) continue;
+                UUID groupId = UUID.fromString(groupIdStr);
+                Document groupDoc = getGroup(groupId);
+                if (groupDoc == null) continue;
+
+                // Filter out invites if already member; also mark processed
+                List<Document> members = groupDoc.getList("members", Document.class);
+                boolean isMember = members != null && members.stream()
+                        .anyMatch(m -> playerUUID.toString().equals(m.getString("playerId")));
+                if (isMember) {
+                    try {
+                        groupInvitesCollection.updateOne(
+                            new Document("_id", invite.getObjectId("_id")),
+                            new Document("$set", new Document("status", "accepted")
+                                .append("processedAt", System.currentTimeMillis()))
+                        );
+                    } catch (Exception ignore) {}
+                    continue;
+                }
+
+                // Normalise/enrich invite document
+                Document setDoc = new Document();
+                if (!invite.containsKey("inviteId") || invite.getString("inviteId") == null) {
+                    setDoc.append("inviteId", UUID.randomUUID().toString());
+                }
+                if (!invite.containsKey("groupName") || invite.getString("groupName") == null) {
+                    setDoc.append("groupName", groupDoc.getString("groupName"));
+                }
+                if (!invite.containsKey("inviterUUID") && invite.containsKey("inviterId")) {
+                    setDoc.append("inviterUUID", invite.getString("inviterId"));
+                }
+                if (!invite.containsKey("inviteeUUID") && invite.containsKey("targetId")) {
+                    setDoc.append("inviteeUUID", invite.getString("targetId"));
+                }
+                if (!invite.containsKey("inviteeName") && invite.containsKey("targetName")) {
+                    setDoc.append("inviteeName", invite.getString("targetName"));
+                }
+
+                if (!setDoc.isEmpty()) {
+                    try {
+                        groupInvitesCollection.updateOne(
+                            new Document("_id", invite.getObjectId("_id")),
+                            new Document("$set", setDoc)
+                        );
+                        // reflect local object to include set values
+                        invite.putAll(setDoc);
+                    } catch (Exception ignore) {}
+                }
+
+                result.add(invite);
+            }
+
+            return result;
         } catch (Exception e) {
             plugin.getLogger().warning("Failed to get group invites: " + e.getMessage());
             return new ArrayList<>();
@@ -1318,16 +1389,31 @@ public class GroupManager {
                     .append("targetId", playerUUID.toString())
                     .append("status", "pending")
             ).first();
-            
+
             if (invite == null) {
                 return false;
             }
-            
+
             String groupIdStr = invite.getString("groupId");
             UUID groupId = UUID.fromString(groupIdStr);
-            
+
+            Document groupDoc = getGroup(groupId);
+            if (groupDoc != null) {
+                List<Document> members = groupDoc.getList("members", Document.class);
+                boolean isMember = members != null && members.stream()
+                        .anyMatch(m -> playerUUID.toString().equals(m.getString("playerId")));
+                if (isMember) {
+                    groupInvitesCollection.updateOne(
+                        new Document("inviteId", inviteId),
+                        new Document("$set", new Document("status", "accepted")
+                            .append("processedAt", System.currentTimeMillis()))
+                    );
+                    return true;
+                }
+            }
+
             boolean joinSuccess = joinGroup(groupId, playerUUID, invite.getString("targetName"));
-            
+
             if (joinSuccess) {
                 groupInvitesCollection.updateOne(
                     new Document("inviteId", inviteId),
@@ -1336,7 +1422,7 @@ public class GroupManager {
                 );
                 return true;
             }
-            
+
             return false;
         } catch (Exception e) {
             plugin.getLogger().warning("Failed to accept group invite: " + e.getMessage());

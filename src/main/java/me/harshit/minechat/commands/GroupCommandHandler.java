@@ -465,6 +465,17 @@ public class GroupCommandHandler implements CommandExecutor, TabCompleter {
             }
 
             UUID groupId = UUID.fromString(group.getString("groupId"));
+
+            List<Document> members = group.getList("members", Document.class);
+            boolean alreadyMember = members != null && members.stream()
+                    .anyMatch(m -> targetUUID.toString().equals(m.getString("playerId")));
+            if (alreadyMember) {
+                Bukkit.getScheduler().runTask(plugin, () -> {
+                    player.sendMessage(Component.text(targetName + " is already a member of this group.").color(NamedTextColor.YELLOW));
+                });
+                return;
+            }
+
             boolean success = groupManager.sendGroupInvite(groupId, player.getUniqueId(), player.getName(),
                     targetUUID, targetName);
 
@@ -489,7 +500,7 @@ public class GroupCommandHandler implements CommandExecutor, TabCompleter {
                         player.sendMessage(Component.text("They will be notified when they come online.").color(NamedTextColor.GRAY));
                     }
                 } else {
-                    player.sendMessage(Component.text("✗ Failed to send invitation. Player might already be invited.").color(NamedTextColor.RED));
+                    player.sendMessage(Component.text("✗ Failed to send invitation. Player might already be invited or is a member.").color(NamedTextColor.RED));
                 }
             });
         });
