@@ -217,7 +217,7 @@ const GroupChatArea: React.FC<GroupChatAreaProps> = ({
   <div className="flex-1 flex flex-col min-h-0">
           <div 
             ref={chatContainerRef}
-            className="flex-1 bg-neutral-900 border-x border-neutral-700 p-4 overflow-y-auto min-h-0"
+            className="flex-1 bg-neutral-900 border-x border-neutral-700 p-4 overflow-y-auto min-h-0 scrollbar-thin"
           >
             {loading ? (
               <div className="flex items-center justify-center h-full">
@@ -314,7 +314,7 @@ const GroupChatArea: React.FC<GroupChatAreaProps> = ({
                 Members ({members.length})
               </h3>
               
-              <div className="space-y-3 max-h-96 overflow-y-auto">
+              <div className="space-y-3 max-h-96 overflow-y-auto scrollbar-thin">
                 {onlineMembers.length > 0 && (
                   <div>
                     <h4 className="text-xs text-neutral-400 uppercase tracking-wide mb-2">

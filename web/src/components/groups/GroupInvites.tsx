@@ -104,7 +104,7 @@ const GroupInvites: React.FC<GroupInvitesProps> = ({
         </div>
       </div>
 
-      <div className="space-y-4">
+  <div className="space-y-4 scrollbar-thin">
         {loading ? (
           Array.from({ length: 3 }).map((_, i) => (
             <div key={i} className="bg-neutral-800 border border-neutral-700 rounded-lg p-6 animate-pulse">

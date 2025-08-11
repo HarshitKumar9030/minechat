@@ -24,7 +24,7 @@ public class WebAPIHandler {
     private final UserDataManager userDataManager;
     private final FriendManager friendManager;
     private final GroupManager groupManager;
-    private final MinechatWebSocketServer webSocketServer;
+    private MinechatWebSocketServer webSocketServer;
 
     // Store active web sessions for real-time updates
     private final Map<String, WebSession> activeSessions = new ConcurrentHashMap<>();
@@ -36,10 +36,14 @@ public class WebAPIHandler {
         this.friendManager = friendManager;
         this.groupManager = groupManager;
 
-        int wsPort = plugin.getConfig().getInt("web.websocket-port", 8081);
-        this.webSocketServer = new MinechatWebSocketServer(plugin, this, wsPort);
-        this.webSocketServer.start();
+    }
 
+    public void setWebSocketServer(MinechatWebSocketServer server) {
+        this.webSocketServer = server;
+    }
+
+    public MinechatWebSocketServer getWebSocketServer() {
+        return this.webSocketServer;
     }
 
     // handles incoming web msgs and routes them to appropriate handlers
@@ -162,10 +166,8 @@ public class WebAPIHandler {
             return;
         }
 
-        // Get target player (online or offline)
         Player onlineTarget = Bukkit.getPlayerExact(targetName);
         
-        // Get target UUID from database if player is offline
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             UUID targetUUID = null;
             if (onlineTarget != null) {
@@ -211,7 +213,6 @@ public class WebAPIHandler {
                     onlineTarget.sendMessage(messageComponent);
                 }
 
-                // Send confirmation back to web
                 sendWebResponse(session.getSessionId(), "message_sent", Map.of(
                     "type", "friend_message",
                     "target", targetName,
@@ -985,13 +986,15 @@ public class WebAPIHandler {
         WebSession session = new WebSession(sessionId, playerId, username, true);
         activeSessions.put(sessionId, session);
 
-        plugin.getLogger().info("Web session authenticated for player: " + username);
+        if (!me.harshit.minechat.Minechat.QUIET_WS_LOGS) {
+            plugin.getLogger().info("Web session authenticated for player: " + username);
+        }
         return true;
     }
 
     public void removeSession(String sessionId) {
         WebSession session = activeSessions.remove(sessionId);
-        if (session != null) {
+        if (session != null && !me.harshit.minechat.Minechat.QUIET_WS_LOGS) {
             plugin.getLogger().info("Removed web session: " + sessionId + " for player: " + session.getPlayerName());
         }
     }
@@ -1023,7 +1026,11 @@ public class WebAPIHandler {
     private void sendWebResponse(String sessionId, String type, Object data) {
         if (MinechatWebSocketHandler.isSessionConnected(sessionId)) {
             MinechatWebSocketHandler.sendToSession(sessionId, type, data);
-            plugin.getLogger().info("WebSocket response sent for session " + sessionId + ": " + type);
+            if (!me.harshit.minechat.Minechat.QUIET_WS_LOGS) {
+                if (!me.harshit.minechat.Minechat.QUIET_WS_LOGS) {
+                    plugin.getLogger().info("WebSocket response sent for session " + sessionId + ": " + type);
+                }
+            }
             return;
         }
 
@@ -1038,7 +1045,9 @@ public class WebAPIHandler {
 
                 session.addResponse(response);
 
-                plugin.getLogger().info("Web response queued for session " + sessionId + ": " + type);
+                if (!me.harshit.minechat.Minechat.QUIET_WS_LOGS) {
+                    plugin.getLogger().info("Web response queued for session " + sessionId + ": " + type);
+                }
             } else {
                 plugin.getLogger().warning("Attempted to send response to inactive session: " + sessionId);
             }

@@ -150,7 +150,7 @@ const GroupSidebar: React.FC<GroupSidebarProps> = ({
             />
           </div>
 
-          <div className="space-y-2 overflow-y-auto min-h-0 flex-1">
+          <div className="space-y-2 overflow-y-auto min-h-0 flex-1 scrollbar-thin">
             {loading ? (
               <div className="flex items-center justify-center py-8">
                 <div className="w-6 h-6 border-2 border-neutral-400 border-t-transparent rounded-full animate-spin"></div>

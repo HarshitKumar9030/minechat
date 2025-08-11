@@ -2,6 +2,8 @@ package me.harshit.minechat;
 
 import me.harshit.minechat.api.FriendAPI;
 import me.harshit.minechat.api.FriendAPIImpl;
+import me.harshit.minechat.api.GroupAPI;
+import me.harshit.minechat.api.GroupAPIImpl;
 import me.harshit.minechat.commands.ChatCommandHandler;
 import me.harshit.minechat.commands.FriendCommandHandler;
 import me.harshit.minechat.commands.GroupCommandHandler;
@@ -15,6 +17,8 @@ import me.harshit.minechat.ranks.RankManager;
 import me.harshit.minechat.web.EmbeddedWebServer;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import org.bukkit.plugin.ServicePriority;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -26,6 +30,7 @@ public final class Minechat extends JavaPlugin {
     private GroupManager groupManager;
     private RankManager rankManager;
     private FriendAPI friendAPI;
+    private GroupAPI groupAPI;
     private EmbeddedWebServer webServer;
     private ChatListener chatListener;
     private PlayerDataListener playerDataListener;
@@ -36,6 +41,8 @@ public final class Minechat extends JavaPlugin {
     private me.harshit.minechat.web.WebAPIHandler webAPIHandler;
     private me.harshit.minechat.web.MinechatWebSocketServer webSocketServer;
 
+    public static boolean QUIET_WS_LOGS = true;
+
     @Override
     public void onEnable() {
         getLogger().info("Starting MineChat...");
@@ -43,7 +50,17 @@ public final class Minechat extends JavaPlugin {
         // Save default config if it doesn't exist
         saveDefaultConfig();
 
-        rankManager = new RankManager(this);
+    rankManager = new RankManager(this);
+
+    setupQuietLoggers();
+
+        QUIET_WS_LOGS = getConfig().getBoolean("web.quiet-websocket-logs", true);
+        boolean showBanner = getConfig().getBoolean("logging.banner", true);
+        boolean debug = getConfig().getBoolean("logging.debug", false);
+
+        if (showBanner) {
+            printBanner(debug);
+        }
 
         databaseManager = new DatabaseManager(this);
 
@@ -57,6 +74,7 @@ public final class Minechat extends JavaPlugin {
             groupManager = new GroupManager(databaseManager.getDatabase(), this);
 
             friendAPI = new FriendAPIImpl(friendManager, this);
+            groupAPI = new GroupAPIImpl(groupManager, this);
 
             webAPIHandler = new me.harshit.minechat.web.WebAPIHandler(this, userDataManager, friendManager, groupManager);
 
@@ -68,6 +86,7 @@ public final class Minechat extends JavaPlugin {
             if (getConfig().getBoolean("web.enable-websocket", true)) {
                 int wsPort = getConfig().getInt("web.websocket-port", 8081);
                 webSocketServer = new me.harshit.minechat.web.MinechatWebSocketServer(this, webAPIHandler, wsPort);
+                webAPIHandler.setWebSocketServer(webSocketServer);
                 webSocketServer.start();
             }
         } else {
@@ -88,11 +107,11 @@ public final class Minechat extends JavaPlugin {
 
         registerCommands();
 
-        registerAPIService();
+    registerAPIService();
 
-        getLogger().info("✓ MineChat enabled successfully!");
+    getLogger().info("✓ MineChat enabled successfully!");
 
-        // if not available log else dont spam the console
+    // if not available log else dont spam the console
         if (!rankManager.isRankSystemAvailable()) {
             getLogger().warning("! No rank plugin detected - using default chat format");
 
@@ -100,6 +119,22 @@ public final class Minechat extends JavaPlugin {
 
         getServer().broadcast(Component.text("MineChat is now active!")
                 .color(NamedTextColor.GREEN));
+    }
+
+    private void setupQuietLoggers() {
+        boolean debug = getConfig().getBoolean("logging.debug", false);
+        if (debug) return; 
+
+        Logger mongo = Logger.getLogger("org.mongodb");
+        mongo.setLevel(Level.WARNING);
+        Logger mongoDriver = Logger.getLogger("org.mongodb.driver");
+        mongoDriver.setLevel(Level.WARNING);
+
+        Logger jetty = Logger.getLogger("org.eclipse.jetty");
+        jetty.setLevel(Level.WARNING);
+
+        Logger spark = Logger.getLogger("spark");
+        spark.setLevel(Level.SEVERE);
     }
 
     @Override
@@ -147,17 +182,40 @@ public final class Minechat extends JavaPlugin {
         }
 
     }
+    
+    private void printBanner(boolean debug) {
+        String[] lines = new String[] {
+                   "     __  ________   ________________  _____  ______",
+                   "    /  |/  /  _/ | / / ____/ ____/ / / /   |/_  __/",
+                   "   / /|_/ // //  |/ / __/ / /   / /_/ / /| | / /   ",
+                   "  / /  / // // /|  / /___/ /___/ __  / ___ |/ /    ",
+                   " /_/  /_/___/_/ |_/_____/____/_/  /_/_/   _/_/     ",
+                   "                                                  ",
+        };
+        for (int i = 0; i < lines.length; i++) {
+            getServer().getConsoleSender().sendMessage(Component.text(lines[i]).color(NamedTextColor.GOLD));
+        }
+        String subtitle = "              Minechat loaded" + (debug ? " [debug]" : "");
+        getServer().getConsoleSender().sendMessage(Component.text(subtitle).color(NamedTextColor.DARK_GRAY));
+    }
 
 
     private void registerAPIService() {
         if (friendAPI != null) {
             getServer().getServicesManager().register(FriendAPI.class, friendAPI, this, ServicePriority.Normal);
         }
+        if (groupAPI != null) {
+            getServer().getServicesManager().register(GroupAPI.class, groupAPI, this, ServicePriority.Normal);
+        }
     }
 
 
     public FriendAPI getFriendAPI() {
         return friendAPI;
+    }
+
+    public GroupAPI getGroupAPI() {
+        return groupAPI;
     }
 
     public DatabaseManager getDatabaseManager() {

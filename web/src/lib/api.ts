@@ -1027,3 +1027,38 @@ export const moderationApi = {
 };
 
 export const api = new MinechatAPI();
+
+export const settingsApi = {
+  getUserSettings: async (playerUUID: string) => {
+    const res = await fetch(`${API_BASE_URL}/user-settings?playerUUID=${encodeURIComponent(playerUUID)}`);
+    if (!res.ok) throw new Error('Failed to load user settings');
+    return res.json();
+  },
+  enableWebAccess: async (playerUUID: string, playerName: string, password: string) => {
+    const res = await fetch(`${API_BASE_URL}/enable-web-access`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ playerUUID, playerName, password })
+    });
+    if (!res.ok) throw new Error('Failed to enable web access');
+    return res.json();
+  },
+  disableWebAccess: async (playerUUID: string) => {
+    const res = await fetch(`${API_BASE_URL}/disable-web-access`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ playerUUID })
+    });
+    if (!res.ok) throw new Error('Failed to disable web access');
+    return res.json();
+  },
+  updateWebPassword: async (playerUUID: string, playerName: string, currentPassword: string | undefined, newPassword: string) => {
+    const res = await fetch(`${API_BASE_URL}/update-web-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ playerUUID, playerName, currentPassword, newPassword })
+    });
+    if (!res.ok) throw new Error('Failed to update web password');
+    return res.json();
+  }
+};

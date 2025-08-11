@@ -80,7 +80,9 @@ public class MinechatWebSocketHandler extends WebSocketAdapter {
             }
 
         } catch (Exception e) {
-            plugin.getLogger().warning("Error processing WebSocket message: " + e.getMessage());
+            if (!Minechat.QUIET_WS_LOGS) {
+                plugin.getLogger().warning("Error processing WebSocket message: " + e.getMessage());
+            }
             sendError("Invalid message format");
         }
     }
@@ -108,11 +110,13 @@ public class MinechatWebSocketHandler extends WebSocketAdapter {
         super.onWebSocketError(cause);
 
         if (cause.getMessage() != null && cause.getMessage().contains("Idle Timeout")) {
-            plugin.getLogger().fine("WebSocket idle timeout for session " + sessionId);
+            if (!Minechat.QUIET_WS_LOGS) plugin.getLogger().fine("WebSocket idle timeout for session " + sessionId);
             return;
         }
 
-        plugin.getLogger().warning("WebSocket error for session " + sessionId + ": " + cause.getMessage());
+        if (!Minechat.QUIET_WS_LOGS) {
+            plugin.getLogger().warning("WebSocket error for session " + sessionId + ": " + cause.getMessage());
+        }
     }
 
     private void handleAuthentication(JsonObject data) {
@@ -137,7 +141,7 @@ public class MinechatWebSocketHandler extends WebSocketAdapter {
             sendMessage(getSession(), response);
 
         } catch (Exception e) {
-            plugin.getLogger().warning("Error during WebSocket authentication: " + e.getMessage());
+            if (!Minechat.QUIET_WS_LOGS) plugin.getLogger().warning("Error during WebSocket authentication: " + e.getMessage());
             sendError("Authentication error");
         }
     }
@@ -148,7 +152,7 @@ public class MinechatWebSocketHandler extends WebSocketAdapter {
             response.addProperty("type", "pong");
             sendMessage(getSession(), response);
         } catch (Exception e) {
-            plugin.getLogger().warning("Error handling ping: " + e.getMessage());
+            if (!Minechat.QUIET_WS_LOGS) plugin.getLogger().warning("Error handling ping: " + e.getMessage());
         }
     }
 
@@ -159,7 +163,7 @@ public class MinechatWebSocketHandler extends WebSocketAdapter {
                 session.getRemote().sendString(jsonString);
             }
         } catch (Exception e) {
-            plugin.getLogger().warning("Error sending WebSocket message: " + e.getMessage());
+            if (!Minechat.QUIET_WS_LOGS) plugin.getLogger().warning("Error sending WebSocket message: " + e.getMessage());
         }
     }
 

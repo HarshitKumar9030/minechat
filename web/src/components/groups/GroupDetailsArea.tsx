@@ -73,9 +73,26 @@ const GroupDetailsArea: React.FC<GroupDetailsAreaProps> = ({
       console.error('Failed to copy MOTD:', e);
     }
   };
-  const getDaysOld = (timestamp: number) => {
-    if (!timestamp || isNaN(timestamp)) return 0;
-    return Math.floor((Date.now() - timestamp) / (1000 * 60 * 60 * 24));
+  const normalizeTimestamp = (ts?: number | string) => {
+    if (ts === undefined || ts === null) return null;
+    let value: number;
+    if (typeof ts === 'string') {
+      const parsed = Date.parse(ts);
+      if (!isNaN(parsed)) value = parsed; else return null;
+    } else {
+      value = ts;
+    }
+    // If value looks like seconds, convert to ms
+    if (value > 0 && value < 1e12) value = value * 1000;
+    return isNaN(value) ? null : value;
+  };
+
+  const getDaysOld = (created?: number | string) => {
+    const normalized = normalizeTimestamp(created) ?? normalizeTimestamp(selectedGroup.createdAt);
+    if (!normalized) return 0;
+    const diff = Date.now() - normalized;
+    if (diff <= 0) return 0;
+    return Math.floor(diff / (1000 * 60 * 60 * 24));
   };
 
   return (
@@ -113,7 +130,7 @@ const GroupDetailsArea: React.FC<GroupDetailsAreaProps> = ({
         </div>
       </div>
 
-  <div className="space-y-6 max-h-[calc(100vh-260px)] overflow-y-auto pr-1">
+  <div className="space-y-6 max-h-[calc(100vh-260px)] overflow-y-auto pr-1 scrollbar-thin">
         {groupStats && (
           <div className="grid grid-cols-2 gap-4">
             <div className="bg-neutral-700 rounded-lg p-4 text-center">

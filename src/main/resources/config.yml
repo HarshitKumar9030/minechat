@@ -55,6 +55,14 @@ web:
   # By default, this is disabled
   default-password-enabled: false
   interface-url: "http://localhost:3000"
+  # Reduce server console noise from Minechat's WebSocket info logs
+  quiet-websocket-logs: true
+
+logging:
+  # Master toggle for Minechat console verbosity
+  debug: false
+  # Print a gold-themed startup banner in console
+  banner: true
 
 private-messages:
   # Enable private messaging feature

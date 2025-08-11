@@ -492,7 +492,7 @@ const GroupsPage = () => {
       />
       
       <div className="max-w-7xl mx-auto px-3 sm:px-4 py-4 sm:py-6">
-        <div className="grid grid-cols-1 lg:grid-cols-4 gap-3 sm:gap-6 h-[calc(100vh-120px)] sm:h-[calc(100vh-140px)] overflow-hidden">
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-3 sm:gap-6 h-[calc(100vh-120px)] sm:h-[calc(100vh-140px)] overflow-hidden scrollbar-thin">
           <GroupSidebar
             groups={groups}
             selectedGroup={selectedGroup}
@@ -609,7 +609,7 @@ const GroupsPage = () => {
             )}
 
             {view === 'management' && (
-              <div className="space-y-6 min-h-0 flex-1 overflow-y-auto pr-1">
+              <div className="space-y-6 min-h-0 flex-1 overflow-y-auto pr-1 scrollbar-thin">
                 <div className="bg-neutral-800 border border-neutral-700 rounded-lg p-6">
                   <h3 className="text-lg font-bold text-neutral-100 font-minecraftia mb-4">
                     Group Management

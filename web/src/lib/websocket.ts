@@ -97,9 +97,11 @@ export class MinechatWebSocket {
   private authData: { username: string; password: string } | null = null;
   private listeners: Map<string, ((data: any) => void)[]> = new Map();
   private heartbeatInterval: NodeJS.Timeout | null = null;
+  private debug = false;
 
-  constructor(url: string = WS_URL) {
+  constructor(url: string = WS_URL, opts?: { debug?: boolean }) {
     this.url = url;
+    this.debug = !!opts?.debug || (typeof window !== 'undefined' && (window as any).__MINECHAT_DEBUG__ === true);
   }
 
   async connect(): Promise<void> {
@@ -108,7 +110,7 @@ export class MinechatWebSocket {
         this.ws = new WebSocket(this.url);
 
         this.ws.onopen = () => {
-          console.log('WebSocket connected');
+          if (this.debug) console.log('WebSocket connected');
           this.reconnectAttempts = 0;
           this.startHeartbeat();
           resolve();
@@ -119,24 +121,24 @@ export class MinechatWebSocket {
             const message: WebSocketMessage = JSON.parse(event.data);
             this.handleMessage(message);
           } catch (error) {
-            console.error('Failed to parse WebSocket message:', error);
+            if (this.debug) console.error('Failed to parse WebSocket message:', error);
           }
         };
 
         this.ws.onclose = (event) => {
-          console.log('WebSocket connection closed:', event.code, event.reason);
+          if (this.debug) console.log('WebSocket connection closed:', event.code, event.reason);
           this.isAuthenticated = false;
           this.stopHeartbeat();
 
           if (!event.wasClean && this.reconnectAttempts < this.maxReconnectAttempts) {
-            console.log(`Attempting to reconnect... (${this.reconnectAttempts + 1}/${this.maxReconnectAttempts})`);
+            if (this.debug) console.log(`Attempting to reconnect... (${this.reconnectAttempts + 1}/${this.maxReconnectAttempts})`);
             this.reconnectAttempts++;
             setTimeout(() => {
               if (this.authData) {
                 this.connect().then(() => {
                   this.authenticate(this.authData!.username, this.authData!.password);
                 }).catch(error => {
-                  console.error('Reconnection failed:', error);
+                  if (this.debug) console.error('Reconnection failed:', error);
                 });
               }
             }, this.reconnectInterval);
@@ -145,13 +147,13 @@ export class MinechatWebSocket {
             setTimeout(() => {
               this.connect().then(() => {
                 this.authenticate(this.authData!.username, this.authData!.password);
-              }).catch(error => console.error('Reconnect after idle timeout failed:', error));
+              }).catch(error => this.debug && console.error('Reconnect after idle timeout failed:', error));
             }, 1000);
           }
         };
 
         this.ws.onerror = (error) => {
-          console.error('WebSocket error:', error);
+          if (this.debug) console.error('WebSocket error:', error);
           reject(error);
         };
 
@@ -166,7 +168,7 @@ export class MinechatWebSocket {
       this.authData = { username, password };
 
       const handleAuthResponse = (data: any) => {
-        console.log('WebSocket auth response received:', JSON.stringify(data, null, 2));
+  if (this.debug) console.log('WebSocket auth response received:', JSON.stringify(data, null, 2));
         
         let success = false;
         if (data && typeof data === 'object') {
@@ -307,7 +309,7 @@ export class MinechatWebSocket {
     if (this.ws && this.ws.readyState === WebSocket.OPEN) {
       this.ws.send(JSON.stringify(message));
     } else {
-      console.warn('WebSocket not connected, message not sent:', message);
+  if (this.debug) console.warn('WebSocket not connected, message not sent:', message);
     }
   }
 
@@ -391,7 +393,7 @@ export class MinechatWebSocket {
 
   sendGroupMessage(groupId: string, content: string, groupName?: string): void {
     if (!this.isAuthenticated) {
-      console.warn('Not authenticated, cannot send group message');
+  if (this.debug) console.warn('Not authenticated, cannot send group message');
       return;
     }
 
@@ -409,7 +411,7 @@ export class MinechatWebSocket {
 
   sendGroupAnnouncement(groupId: string, content: string): void {
     if (!this.isAuthenticated) {
-      console.warn('Not authenticated, cannot send group announcement');
+  if (this.debug) console.warn('Not authenticated, cannot send group announcement');
       return;
     }
 
@@ -426,7 +428,7 @@ export class MinechatWebSocket {
 
   sendFriendMessage(targetName: string, content: string): void {
     if (!this.isAuthenticated) {
-      console.warn('Not authenticated, cannot send friend message');
+  if (this.debug) console.warn('Not authenticated, cannot send friend message');
       return;
     }
 
@@ -442,7 +444,7 @@ export class MinechatWebSocket {
 
   sendDirectMessage(targetName: string, content: string): void {
     if (!this.isAuthenticated) {
-      console.warn('Not authenticated, cannot send direct message');
+  if (this.debug) console.warn('Not authenticated, cannot send direct message');
       return;
     }
 
@@ -458,7 +460,7 @@ export class MinechatWebSocket {
 
   kickGroupMember(groupId: string, targetUUID: string, reason?: string): void {
     if (!this.isAuthenticated) {
-      console.warn('Not authenticated, cannot kick member');
+  if (this.debug) console.warn('Not authenticated, cannot kick member');
       return;
     }
 
@@ -475,7 +477,7 @@ export class MinechatWebSocket {
 
   promoteGroupMember(groupId: string, targetUUID: string): void {
     if (!this.isAuthenticated) {
-      console.warn('Not authenticated, cannot promote member');
+  if (this.debug) console.warn('Not authenticated, cannot promote member');
       return;
     }
 
@@ -491,7 +493,7 @@ export class MinechatWebSocket {
 
   muteGroupMember(groupId: string, targetUUID: string, duration?: number): void {
     if (!this.isAuthenticated) {
-      console.warn('Not authenticated, cannot mute member');
+  if (this.debug) console.warn('Not authenticated, cannot mute member');
       return;
     }
 

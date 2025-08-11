@@ -112,6 +112,11 @@ public class EmbeddedWebServer {
             server.createContext("/api/search-players", new SearchPlayersHandler());
             server.createContext("/api/ranks", new RanksHandler());
 
+            server.createContext("/api/user-settings", new UserSettingsHandler());
+            server.createContext("/api/enable-web-access", new EnableWebAccessHandler());
+            server.createContext("/api/disable-web-access", new DisableWebAccessHandler());
+            server.createContext("/api/update-web-password", new UpdateWebPasswordHandler());
+
             server.createContext("/api/health", new HealthHandler());
             server.createContext("/api/health/detailed", new HealthHandler());
             server.createContext("/api/test", new TestHandler());
@@ -240,6 +245,147 @@ public class EmbeddedWebServer {
                     Map<String, Object> response = Map.of("friends", friends);
                     sendJsonResponse(exchange, response, 200);
 
+                } catch (Exception e) {
+                    sendErrorResponse(exchange, "Internal server error", 500);
+                }
+            } else {
+                sendErrorResponse(exchange, "Method not allowed", 405);
+            }
+        }
+    }
+
+    private class UserSettingsHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            new CORSHandler().handle(exchange);
+
+            if ("GET".equals(exchange.getRequestMethod())) {
+                try {
+                    String query = exchange.getRequestURI().getQuery();
+                    String playerUUID = getQueryParam(query, "playerUUID");
+                    if (playerUUID == null) {
+                        sendErrorResponse(exchange, "Player UUID required", 400);
+                        return;
+                    }
+
+                    org.bson.Document user = userDataManager.getUserData(UUID.fromString(playerUUID));
+                    if (user == null) {
+                        sendErrorResponse(exchange, "User not found", 404);
+                        return;
+                    }
+
+                    Map<String, Object> userMap = new HashMap<>();
+                    userMap.put("playerUUID", user.getString("playerUUID"));
+                    userMap.put("playerName", user.getString("playerName"));
+                    userMap.put("webAccessEnabled", user.getBoolean("webAccessEnabled", false));
+                    userMap.put("rank", user.getString("rank"));
+                    userMap.put("formattedRank", user.getString("formattedRank"));
+                    userMap.put("online", user.getBoolean("online", false));
+                    if (user.containsKey("lastSeen")) userMap.put("lastSeen", user.getLong("lastSeen"));
+                    if (user.containsKey("firstJoin")) userMap.put("firstJoin", user.getLong("firstJoin"));
+
+                    sendJsonResponse(exchange, Map.of("user", userMap), 200);
+                } catch (Exception e) {
+                    sendErrorResponse(exchange, "Internal server error", 500);
+                }
+            } else {
+                sendErrorResponse(exchange, "Method not allowed", 405);
+            }
+        }
+    }
+
+    private class EnableWebAccessHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            new CORSHandler().handle(exchange);
+
+            if ("POST".equals(exchange.getRequestMethod())) {
+                try {
+                    String body = readRequestBody(exchange);
+                    JsonObject json = gson.fromJson(body, JsonObject.class);
+                    String playerUUID = json.has("playerUUID") ? json.get("playerUUID").getAsString() : null;
+                    String playerName = json.has("playerName") ? json.get("playerName").getAsString() : null;
+                    String password = json.has("password") ? json.get("password").getAsString() : null;
+
+                    if (playerUUID == null || playerName == null || password == null || password.isEmpty()) {
+                        sendErrorResponse(exchange, "playerUUID, playerName and password are required", 400);
+                        return;
+                    }
+
+                    boolean success = userDataManager.setWebPassword(UUID.fromString(playerUUID), playerName, password);
+                    Map<String, Object> res = new HashMap<>();
+                    res.put("success", success);
+                    res.put("message", success ? "Web access enabled" : "Failed to enable web access");
+                    sendJsonResponse(exchange, res, success ? 200 : 500);
+                } catch (Exception e) {
+                    sendErrorResponse(exchange, "Internal server error", 500);
+                }
+            } else {
+                sendErrorResponse(exchange, "Method not allowed", 405);
+            }
+        }
+    }
+
+    private class DisableWebAccessHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            new CORSHandler().handle(exchange);
+
+            if ("POST".equals(exchange.getRequestMethod())) {
+                try {
+                    String body = readRequestBody(exchange);
+                    JsonObject json = gson.fromJson(body, JsonObject.class);
+                    String playerUUID = json.has("playerUUID") ? json.get("playerUUID").getAsString() : null;
+                    if (playerUUID == null) {
+                        sendErrorResponse(exchange, "playerUUID is required", 400);
+                        return;
+                    }
+                    boolean success = userDataManager.disableWebAccess(UUID.fromString(playerUUID));
+                    Map<String, Object> res = new HashMap<>();
+                    res.put("success", success);
+                    res.put("message", success ? "Web access disabled" : "Failed to disable web access");
+                    sendJsonResponse(exchange, res, success ? 200 : 500);
+                } catch (Exception e) {
+                    sendErrorResponse(exchange, "Internal server error", 500);
+                }
+            } else {
+                sendErrorResponse(exchange, "Method not allowed", 405);
+            }
+        }
+    }
+
+    private class UpdateWebPasswordHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            new CORSHandler().handle(exchange);
+
+            if ("POST".equals(exchange.getRequestMethod())) {
+                try {
+                    String body = readRequestBody(exchange);
+                    JsonObject json = gson.fromJson(body, JsonObject.class);
+                    String playerUUID = json.has("playerUUID") ? json.get("playerUUID").getAsString() : null;
+                    String playerName = json.has("playerName") ? json.get("playerName").getAsString() : null;
+                    String currentPassword = json.has("currentPassword") ? json.get("currentPassword").getAsString() : null;
+                    String newPassword = json.has("newPassword") ? json.get("newPassword").getAsString() : null;
+
+                    if (playerUUID == null || playerName == null || newPassword == null || newPassword.isEmpty()) {
+                        sendErrorResponse(exchange, "playerUUID, playerName and newPassword are required", 400);
+                        return;
+                    }
+
+                    if (currentPassword != null && !currentPassword.isEmpty()) {
+                        boolean ok = userDataManager.verifyWebPassword(playerName, currentPassword);
+                        if (!ok) {
+                            sendErrorResponse(exchange, "Current password incorrect", 401);
+                            return;
+                        }
+                    }
+
+                    boolean success = userDataManager.setWebPassword(UUID.fromString(playerUUID), playerName, newPassword);
+                    Map<String, Object> res = new HashMap<>();
+                    res.put("success", success);
+                    res.put("message", success ? "Password updated" : "Failed to update password");
+                    sendJsonResponse(exchange, res, success ? 200 : 500);
                 } catch (Exception e) {
                     sendErrorResponse(exchange, "Internal server error", 500);
                 }
